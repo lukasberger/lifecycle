@@ -189,7 +189,7 @@ func (f *FakeImage) tarContents() string {
 	return strBuilder.String()
 }
 
-func (f *FakeImage) NumberOfLayers() int {
+func (f *FakeImage) NumberOfAddedLayers() int {
 	return len(f.layers)
 }
 

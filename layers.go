@@ -47,6 +47,10 @@ func nonCached(md LayerMetadata) bool {
 	return !md.Cache
 }
 
+func cached(md LayerMetadata) bool {
+	return md.Cache
+}
+
 func (bd *bpLayersDir) findLayers(f func(layer LayerMetadata) bool) []bpLayer {
 	var launchLayers []bpLayer
 	for _, l := range bd.layers {

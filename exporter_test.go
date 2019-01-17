@@ -205,7 +205,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeRunImage, fakeOriginalImage, launcherPath))
 
 				var applayer, configLayer, layer2, layer3 = 1, 1, 1, 1
-				h.AssertEq(t, fakeRunImage.NumberOfLayers(), applayer+configLayer+layer2+layer3)
+				h.AssertEq(t, fakeRunImage.NumberOfAddedLayers(), applayer+configLayer+layer2+layer3)
 			})
 
 			it("only reuses expected layers", func() {
@@ -427,7 +427,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeRunImage, nonExistingOriginalImage, launcherPath))
 
 				var applayer, configLayer, launcherLayer, layer1, layer2 = 1, 1, 1, 1, 1
-				h.AssertEq(t, fakeRunImage.NumberOfLayers(), applayer+configLayer+launcherLayer+layer1+layer2)
+				h.AssertEq(t, fakeRunImage.NumberOfAddedLayers(), applayer+configLayer+launcherLayer+layer1+layer2)
 			})
 
 			it("saves metadata with layer info", func() {
