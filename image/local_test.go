@@ -46,6 +46,17 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 		repoName = "pack-image-test-" + h.RandString(10)
 	})
 
+	when("#NewEmptyLocal", func(){
+		it("returns a scratch image", func() {
+			img := factory.NewEmptyLocal(repoName)
+
+			t.Log("check that the empty image is useable image")
+			h.AssertNil(t, img.SetLabel("some-key", "some-val"))
+			_, err := img.Save()
+			h.AssertNil(t, err)
+		})
+	})
+
 	when("#label", func() {
 		when("image exists", func() {
 			it.Before(func() {

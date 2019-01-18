@@ -18,6 +18,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	dockertypes "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/pkg/errors"
@@ -62,6 +63,21 @@ func (f *Factory) NewLocal(repoName string, pull bool) (Image, error) {
 		FS:         f.FS,
 		prevOnce:   &sync.Once{},
 	}, nil
+}
+
+func (f *Factory) NewEmptyLocal(repoName string) Image {
+	inspect := dockertypes.ImageInspect{}
+	inspect.Config = &container.Config{
+		Labels: map[string]string{},
+	}
+	return &local{
+		RepoName:   repoName,
+		Docker:     f.Docker,
+		Inspect:    inspect,
+		layerPaths: []string{},
+		FS:         f.FS,
+		prevOnce:   &sync.Once{},
+	}
 }
 
 func (l *local) Label(key string) (string, error) {

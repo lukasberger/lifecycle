@@ -1,5 +1,6 @@
 cache = true
 launch = true
+build = false
 
 [metadata]
- layer2key = "layer2val"
+ cache-true-key = "cache-true-val"

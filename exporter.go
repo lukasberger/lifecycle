@@ -165,9 +165,10 @@ func (e *Exporter) cleanBuildpacksNotInGroup(layersDir string) error {
 		if e.groupContainsBuildpack(fi.Name()) {
 			continue
 		}
-
-		if err := os.RemoveAll(filepath.Join(layersDir, fi.Name())); err != nil {
-			return errors.Wrap(err, "failed to cleanup layers dir")
+		if fi.IsDir() {
+			if err := os.RemoveAll(filepath.Join(layersDir, fi.Name())); err != nil {
+				return errors.Wrap(err, "failed to cleanup layers dir")
+			}
 		}
 	}
 	return nil

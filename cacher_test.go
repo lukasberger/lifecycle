@@ -1,12 +1,12 @@
 package lifecycle_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -27,7 +27,12 @@ func TestCacher(t *testing.T) {
 
 func testCacher(t *testing.T, when spec.G, it spec.S) {
 	when("#Cacher", func() {
-		var cacher *lifecycle.Cacher
+		var (
+			cacher                 *lifecycle.Cacher
+			layersDir              string
+			cacheTrueLayerSHA      string
+			otherBuildpackLayerSHA string
+		)
 
 		it.Before(func() {
 			tmpDir, err := ioutil.TempDir("", "lifecycle.exporter.layer")
@@ -38,12 +43,17 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 					{ID: "buildpack.id"},
 					{ID: "other.buildpack.id"},
 				},
-				Out: log.New(os.Stdout, "", 0),
+				Out: log.New(ioutil.Discard, "", 0),
 			}
+			layersDir = filepath.Join("testdata", "cacher", "layers")
+			cacheTrueLayerSHA = "sha256:" + h.ComputeSHA256ForPath(t, filepath.Join(layersDir, "buildpack.id/cache-true-layer"), 0, 0)
+			otherBuildpackLayerSHA = "sha256:" + h.ComputeSHA256ForPath(t, filepath.Join(layersDir, "other.buildpack.id/other-buildpack-layer"), 0, 0)
 		})
 
 		when("there is no previous cached image", func() {
-			var mockNonExistingOriginalImage *testmock.MockImage
+			var (
+				mockNonExistingOriginalImage *testmock.MockImage
+			)
 
 			it.Before(func() {
 				mockNonExistingOriginalImage = testmock.NewMockImage(gomock.NewController(t))
@@ -54,7 +64,6 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 
 			it("exports cached layers to an image", func() {
 				cacheImage := h.NewFakeImage(t, "cache-image", "", "")
-				layersDir := filepath.Join("testdata", "cacher", "layers")
 				err := cacher.Cache(layersDir, mockNonExistingOriginalImage, cacheImage)
 				h.AssertNil(t, err)
 
@@ -68,13 +77,37 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 				h.AssertEq(t, cacheImage.IsSaved(), true)
 			})
 
-			it("doesn't export uncached layers", func() {
+			it("sets label metadata", func() {
 				cacheImage := h.NewFakeImage(t, "cache-image", "", "")
-				layersDir := filepath.Join("testdata", "cacher", "layers")
 				err := cacher.Cache(layersDir, mockNonExistingOriginalImage, cacheImage)
 				h.AssertNil(t, err)
 
-				h.AssertEq(t, cacheImage.NumberOfAddedLayers(), 2)
+				metadataJSON, err := cacheImage.Label("io.buildpacks.lifecycle.metadata")
+				h.AssertNil(t, err)
+
+				var metadata lifecycle.AppImageMetadata
+				if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+					t.Fatalf("badly formatted metadata: %s", err)
+				}
+
+				t.Log("adds layer shas to metadata label")
+				h.AssertEq(t, metadata.Buildpacks[0].ID, "buildpack.id")
+				h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].SHA, cacheTrueLayerSHA)
+				h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].Launch, true)
+				h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].Build, false)
+				h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].Cache, true)
+				h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].Data, map[string]interface{}{
+					"cache-true-key": "cache-true-val",
+				})
+			})
+
+			it("doesn't export uncached layers", func() {
+				cacheImage := h.NewFakeImage(t, "cache-image", "", "")
+				err := cacher.Cache(layersDir, mockNonExistingOriginalImage, cacheImage)
+				h.AssertNil(t, err)
+
+				var cacheTrueLayer, cacheTrueNoSHALayer, otherBuildpackLayer = 1, 1, 1
+				h.AssertEq(t, cacheImage.NumberOfAddedLayers(), cacheTrueLayer+cacheTrueNoSHALayer+otherBuildpackLayer)
 				h.AssertEq(t, cacheImage.IsSaved(), true)
 			})
 		})
@@ -82,12 +115,10 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 		when("there is a previous cached image", func() {
 			var (
 				fakeOriginalImage        *h.FakeImage
-				layersDir                string
 				computedReusableLayerSHA string
 				metadataTemplate         string
 			)
 			it.Before(func() {
-				layersDir = filepath.Join("testdata", "cacher", "layers")
 				fakeOriginalImage = h.NewFakeImage(t, "", "", "")
 				computedReusableLayerSHA = "sha256:" + h.ComputeSHA256ForPath(t, filepath.Join(layersDir, "buildpack.id/cache-true-no-sha-layer"), 0, 0)
 				metadataTemplate = `{
@@ -97,7 +128,8 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
       "layers": {
         "cache-true-layer": {
           "cache": true,
-          "sha": "%s"
+          "sha": "%s",
+          "data": {"old":"data"}
         },
         "cache-true-no-sha-layer": {
           "cache": true,
@@ -112,25 +144,23 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 				it.Before(func() {
 					h.AssertNil(t, fakeOriginalImage.SetLabel(
 						"io.buildpacks.lifecycle.metadata",
-						fmt.Sprintf(metadataTemplate, "same-sha", computedReusableLayerSHA),
+						fmt.Sprintf(metadataTemplate, cacheTrueLayerSHA, computedReusableLayerSHA),
 					))
 				})
 
 				it("reuses layers when the existing sha matches previous metadata", func() {
 					cacheImage := h.NewFakeImage(t, "cache-image", "", "")
-					layersDir := filepath.Join("testdata", "cacher", "layers")
 					err := cacher.Cache(layersDir, fakeOriginalImage, cacheImage)
 					h.AssertNil(t, err)
 
 					reusedLayers := cacheImage.ReusedLayers()
 					h.AssertEq(t, len(reusedLayers), 2)
-					h.AssertContains(t, reusedLayers, "same-sha")
+					h.AssertContains(t, reusedLayers, cacheTrueLayerSHA)
 					h.AssertEq(t, cacheImage.IsSaved(), true)
 				})
 
 				it("reuses layers when the calculated sha matches previous metadata", func() {
 					cacheImage := h.NewFakeImage(t, "cache-image", "", "")
-					layersDir := filepath.Join("testdata", "cacher", "layers")
 					err := cacher.Cache(layersDir, fakeOriginalImage, cacheImage)
 					h.AssertNil(t, err)
 
@@ -138,6 +168,48 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 					h.AssertEq(t, len(reusedLayers), 2)
 					h.AssertContains(t, reusedLayers, computedReusableLayerSHA)
 					h.AssertEq(t, cacheImage.IsSaved(), true)
+				})
+
+				it("sets label metadata", func() {
+					cacheImage := h.NewFakeImage(t, "cache-image", "", "")
+					err := cacher.Cache(layersDir, fakeOriginalImage, cacheImage)
+					h.AssertNil(t, err)
+
+					metadataJSON, err := cacheImage.Label("io.buildpacks.lifecycle.metadata")
+					h.AssertNil(t, err)
+
+					var metadata lifecycle.AppImageMetadata
+					if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+						t.Fatalf("badly formatted metadata: %s", err)
+					}
+
+					t.Log("adds layer shas to metadata label")
+					h.AssertEq(t, metadata.Buildpacks[0].ID, "buildpack.id")
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].SHA, cacheTrueLayerSHA)
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].Launch, true)
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].Build, false)
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].Cache, true)
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-layer"].Data, map[string]interface{}{
+						"cache-true-key": "cache-true-val",
+					})
+
+					h.AssertEq(t, metadata.Buildpacks[0].ID, "buildpack.id")
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-no-sha-layer"].SHA, computedReusableLayerSHA)
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-no-sha-layer"].Launch, false)
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-no-sha-layer"].Build, false)
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-no-sha-layer"].Cache, true)
+					h.AssertEq(t, metadata.Buildpacks[0].Layers["cache-true-no-sha-layer"].Data, map[string]interface{}{
+						"cache-true-no-sha-key": "cache-true-no-sha-val",
+					})
+
+					h.AssertEq(t, metadata.Buildpacks[1].ID, "other.buildpack.id")
+					h.AssertEq(t, metadata.Buildpacks[1].Layers["other-buildpack-layer"].SHA, otherBuildpackLayerSHA)
+					h.AssertEq(t, metadata.Buildpacks[1].Layers["other-buildpack-layer"].Launch, true)
+					h.AssertEq(t, metadata.Buildpacks[1].Layers["other-buildpack-layer"].Build, false)
+					h.AssertEq(t, metadata.Buildpacks[1].Layers["other-buildpack-layer"].Cache, true)
+					h.AssertEq(t, metadata.Buildpacks[1].Layers["other-buildpack-layer"].Data, map[string]interface{}{
+						"other-buildpack-key": "other-buildpack-val",
+					})
 				})
 			})
 
@@ -151,12 +223,12 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 
 				it("doesn't reuse layers", func() {
 					cacheImage := h.NewFakeImage(t, "cache-image", "", "")
-					layersDir := filepath.Join("testdata", "cacher", "layers")
 					err := cacher.Cache(layersDir, fakeOriginalImage, cacheImage)
 					h.AssertNil(t, err)
 
 					h.AssertEq(t, len(cacheImage.ReusedLayers()), 0)
-					h.AssertEq(t, cacheImage.NumberOfAddedLayers(), 2)
+					var cacheTrueLayer, cacheTrueNoSHALayer, otherBuildpackLayer = 1, 1, 1
+					h.AssertEq(t, cacheImage.NumberOfAddedLayers(), cacheTrueLayer+cacheTrueNoSHALayer+otherBuildpackLayer)
 					h.AssertEq(t, cacheImage.IsSaved(), true)
 				})
 			})

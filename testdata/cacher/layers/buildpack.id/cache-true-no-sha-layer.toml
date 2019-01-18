@@ -2,4 +2,4 @@ cache = true
 launch = false
 
 [metadata]
- layer3key = "layer3val"
+ cache-true-no-sha-key = "cache-true-no-sha-val"

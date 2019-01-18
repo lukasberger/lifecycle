@@ -21,10 +21,13 @@ type Cacher struct {
 	ArtifactsDir string
 	Buildpacks   []*Buildpack
 	Out          *log.Logger
+	Err          *log.Logger
+	UID          int
+	GID          int
 }
 
 func (c *Cacher) Cache(layersDir string, oldCacheImage, newCacheImage image.Image) error {
-	loggingCacheimage := &loggingImage{
+	loggingCacheImage := &loggingImage{
 		Out:   c.Out,
 		image: newCacheImage,
 	}
@@ -34,19 +37,41 @@ func (c *Cacher) Cache(layersDir string, oldCacheImage, newCacheImage image.Imag
 		return errors.Wrap(err, "metadata for previous image")
 	}
 
+	newMetadata := AppImageMetadata{
+		Buildpacks: []BuildpackMetadata{},
+	}
+
 	for _, bp := range c.Buildpacks {
 		bpDir, err := readBuildpackLayersDir(layersDir, bp.EscapedID())
 		if err != nil {
 			return err
 		}
+		bpMetadata := BuildpackMetadata{
+			ID: bp.ID,
+			Version: bp.Version,
+			Layers: map[string]LayerMetadata{},
+		}
 		for _, l := range bpDir.findLayers(cached) {
-			origLayerMetadata := origMetadata.metadataForBuildpack(bp.ID).Layers[l.name()]
-			if _, err := c.addOrReuseLayer(loggingCacheimage, l, origLayerMetadata.SHA); err != nil {
+			metadata, err := l.read()
+			if err != nil {
 				return err
 			}
+			origLayerMetadata := origMetadata.metadataForBuildpack(bp.ID).Layers[l.name()]
+			if metadata.SHA, err = c.addOrReuseLayer(loggingCacheImage, l, origLayerMetadata.SHA); err != nil {
+				return err
+			}
+			bpMetadata.Layers[l.name()] = metadata
 		}
+		newMetadata.Buildpacks = append(newMetadata.Buildpacks, bpMetadata)
 	}
-	_, err = loggingCacheimage.Save()
+	data, err := json.Marshal(newMetadata)
+	if err != nil {
+		return errors.Wrap(err, "marshall metadata")
+	}
+	if err := loggingCacheImage.SetLabel(MetadataLabel, string(data)); err != nil {
+		return errors.Wrap(err, "set app image metadata label")
+	}
+	_, err = loggingCacheImage.Save()
 	return err
 }
 
@@ -63,7 +88,7 @@ func (c *Cacher) addOrReuseLayer(image *loggingImage, layer bpLayer, previousSHA
 	}
 
 	if md.SHA == previousSHA {
-		return previousSHA, image.ReuseLayer(layer.Identifier(), previousSHA)
+		return md.SHA, image.ReuseLayer(layer.Identifier(), previousSHA)
 	}
 	return md.SHA, image.AddLayer(layer.Identifier(), md.SHA, c.tarPath(md.SHA))
 }
