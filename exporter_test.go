@@ -4,11 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/buildpack/lifecycle/image"
-	"github.com/buildpack/lifecycle/testmock"
-	"github.com/golang/mock/gomock"
 	"io"
 	"io/ioutil"
 	"log"
@@ -18,6 +14,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang/mock/gomock"
+
+	"github.com/buildpack/lifecycle/image"
+	"github.com/buildpack/lifecycle/testmock"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -360,9 +361,8 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				mockNonExistingOriginalImage := testmock.NewMockImage(gomock.NewController(t))
 
 				mockNonExistingOriginalImage.EXPECT().Name().Return("app/original-Image-Name")
-				mockNonExistingOriginalImage.EXPECT().Found().Return(false, nil)
 				mockNonExistingOriginalImage.EXPECT().Label("io.buildpacks.lifecycle.metadata").
-					Return("", errors.New("not exist")).AnyTimes()
+					Return("", nil).AnyTimes()
 
 				nonExistingOriginalImage = mockNonExistingOriginalImage
 			})

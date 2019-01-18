@@ -18,6 +18,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	dockertypes "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/pkg/errors"
@@ -39,19 +40,32 @@ type local struct {
 	easyAddLayers    []string
 }
 
-// if there is an image, do the thing
-// or do the other thing
-
 func (f *Factory) NewLocal(repoName string, pull bool) (Image, error) {
 	if pull {
-		if err := pullImage(f.Docker, repoName); err != nil {
-			return nil, fmt.Errorf("failed to pull image '%s' : %s", repoName, err)
+		registryImage, err := newV1Image(repoName)
+		if err != nil {
+			return nil, err
+		}
+		found, err := v1ImageFound(registryImage)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			if err := pullImage(f.Docker, repoName); err != nil {
+				return nil, fmt.Errorf("failed to pull image '%s' : %s", repoName, err)
+			}
 		}
 	}
 
 	inspect, _, err := f.Docker.ImageInspectWithRaw(context.Background(), repoName)
 	if err != nil && !dockerclient.IsErrNotFound(err) {
 		return nil, errors.Wrap(err, "analyze read previous image config")
+	}
+	if inspect.Config == nil {
+		inspect.Config = &container.Config{
+			Image:  repoName,
+			Labels: map[string]string{},
+		}
 	}
 
 	return &local{
@@ -98,10 +112,6 @@ func (l *local) Rename(name string) {
 
 func (l *local) Name() string {
 	return l.RepoName
-}
-
-func (l *local) Found() (bool, error) {
-	return l.Inspect.Config != nil, nil
 }
 
 func (l *local) Digest() (string, error) {
@@ -172,6 +182,9 @@ func (l *local) Rebase(baseTopLayer string, newBase Image) error {
 func (l *local) SetLabel(key, val string) error {
 	if l.Inspect.Config == nil {
 		return fmt.Errorf("failed to set label, image '%s' does not exist", l.RepoName)
+	}
+	if l.Inspect.Config.Labels == nil {
+		l.Inspect.Config.Labels = map[string]string{}
 	}
 	l.Inspect.Config.Labels[key] = val
 	return nil

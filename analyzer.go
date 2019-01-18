@@ -20,19 +20,10 @@ type Analyzer struct {
 }
 
 func (a *Analyzer) Analyze(image image.Image) error {
-	found, err := image.Found()
+	var metadata AppImageMetadata
+	metadata, err := a.getMetadata(image)
 	if err != nil {
 		return err
-	}
-
-	var metadata AppImageMetadata
-	if !found {
-		a.Out.Printf("WARNING: image '%s' not found or requires authentication to access\n", image.Name())
-	} else {
-		metadata, err = a.getMetadata(image)
-		if err != nil {
-			return err
-		}
 	}
 	return a.analyze(metadata)
 }
@@ -111,7 +102,7 @@ func (a *Analyzer) getMetadata(image image.Image) (AppImageMetadata, error) {
 		return metadata, err
 	}
 	if label == "" {
-		a.Out.Printf("WARNING: previous image '%s' does not have '%s' label", image.Name(), MetadataLabel)
+		a.Out.Printf("WARNING: previous image '%s' not found or does not have '%s' label", image.Name(), MetadataLabel)
 		return metadata, nil
 	}
 

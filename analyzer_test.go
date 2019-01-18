@@ -2,7 +2,6 @@ package lifecycle_test
 
 import (
 	"bytes"
-	"errors"
 	"io/ioutil"
 	"log"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/google/go-cmp/cmp"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 
@@ -76,7 +74,6 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 		when("image exists", func() {
 			when("image label has compatible metadata", func() {
 				it.Before(func() {
-					image.EXPECT().Found().Return(true, nil)
 					image.EXPECT().Label("io.buildpacks.lifecycle.metadata").Return(`{
   "buildpacks": [
     {
@@ -449,60 +446,18 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 			})
 		})
 
-		when("the image cannot found", func() {
+		when("the image cannot be found or does not have the required label", func() {
 			it.Before(func() {
-				image.EXPECT().Found().Return(false, nil)
+				image.EXPECT().Label("io.buildpacks.lifecycle.metadata").Return("", nil)
 			})
 
 			it("warns user and clears the cached launch layers", func() {
 				h.RecursiveCopy(t, filepath.Join("testdata", "analyzer", "cached-layers"), layerDir)
 				err := analyzer.Analyze(image)
 				assertNil(t, err)
-				if !strings.Contains(stdout.String(), "WARNING: image 'image-repo-name' not found or requires authentication to access") {
+				if !strings.Contains(stdout.String(), "WARNING: previous image 'image-repo-name' not found or does not have 'io.buildpacks.lifecycle.metadata' label") {
 					t.Fatalf("expected warning in stdout: %s", stdout.String())
 				}
-				if _, err := ioutil.ReadDir(filepath.Join(layerDir, "no.metadata.buildpack", "launchlayer")); !os.IsNotExist(err) {
-					t.Fatalf("Found stale launchlayer cache, it should not exist")
-				}
-				if _, err := ioutil.ReadDir(filepath.Join(layerDir, "metdata.buildpack", "stale-launch-build")); !os.IsNotExist(err) {
-					t.Fatalf("Found stale stale-launch-build cache, it should not exist")
-				}
-				if _, err := ioutil.ReadDir(filepath.Join(layerDir, "not.in.group.buildpack")); !os.IsNotExist(err) {
-					t.Fatalf("Found stale no group buildpack cache, it should not exist")
-				}
-				if _, err := ioutil.ReadDir(filepath.Join(layerDir, "some-app-dir")); err != nil {
-					t.Fatalf("Missing some-app-dir")
-				}
-			})
-		})
-
-		when("there is an error while trying to find the image", func() {
-			it.Before(func() {
-				image.EXPECT().Found().Return(false, errors.New("some-error"))
-			})
-
-			it("returns the error", func() {
-				err := analyzer.Analyze(image)
-				h.AssertError(t, err, "some-error")
-			})
-		})
-
-		when("the image does not have the required label", func() {
-			it.Before(func() {
-				image.EXPECT().Found().Return(true, nil)
-				image.EXPECT().Label("io.buildpacks.lifecycle.metadata").Return("", nil)
-			})
-
-			it("warns user and returns", func() {
-				h.RecursiveCopy(t, filepath.Join("testdata", "analyzer", "cached-layers"), layerDir)
-
-				err := analyzer.Analyze(image)
-				assertNil(t, err)
-
-				if !strings.Contains(stdout.String(), "WARNING: previous image 'image-repo-name' does not have 'io.buildpacks.lifecycle.metadata' label") {
-					t.Fatalf("expected warning in stdout: %s", stdout.String())
-				}
-
 				if _, err := ioutil.ReadDir(filepath.Join(layerDir, "no.metadata.buildpack", "launchlayer")); !os.IsNotExist(err) {
 					t.Fatalf("Found stale launchlayer cache, it should not exist")
 				}
@@ -520,7 +475,6 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 
 		when("the image label has incompatible metadata", func() {
 			it.Before(func() {
-				image.EXPECT().Found().Return(true, nil)
 				image.EXPECT().Label("io.buildpacks.lifecycle.metadata").Return(`{["bad", "metadata"]}`, nil)
 			})
 
@@ -555,12 +509,5 @@ func assertNil(t *testing.T, actual interface{}) {
 	t.Helper()
 	if actual != nil {
 		t.Fatalf("Expected nil: %s", actual)
-	}
-}
-
-func assertEq(t *testing.T, actual, expected interface{}) {
-	t.Helper()
-	if diff := cmp.Diff(actual, expected); diff != "" {
-		t.Fatal(diff)
 	}
 }

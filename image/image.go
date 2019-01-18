@@ -15,5 +15,4 @@ type Image interface {
 	ReuseLayer(sha string) error
 	TopLayer() (string, error)
 	Save() (string, error)
-	Found() (bool, error)
 }

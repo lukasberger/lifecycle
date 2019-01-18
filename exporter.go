@@ -184,18 +184,15 @@ func (e *Exporter) groupContainsBuildpack(name string) bool {
 
 func (e *Exporter) getImageMetadata(image image.Image) (AppImageMetadata, error) {
 	var metadata AppImageMetadata
-	found, err := image.Found()
+	label, err := image.Label(MetadataLabel)
 	if err != nil {
-		return metadata, errors.Wrap(err, "looking for image")
+		return metadata, errors.Wrap(err, "getting metadata")
 	}
-	if found {
-		label, err := image.Label(MetadataLabel)
-		if err != nil {
-			return metadata, errors.Wrap(err, "getting metadata")
-		}
-		if err := json.Unmarshal([]byte(label), &metadata); err != nil {
-			return metadata, err
-		}
+	if label == "" {
+		return metadata, nil
+	}
+	if err := json.Unmarshal([]byte(label), &metadata); err != nil {
+		return metadata, err
 	}
 	return metadata, nil
 }

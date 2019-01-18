@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	dockerClient "github.com/docker/docker/client"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -21,11 +20,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildpack/lifecycle/fs"
+	dockerClient "github.com/docker/docker/client"
+
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/buildpack/lifecycle/fs"
 )
 
 func RandString(n int) string {
@@ -91,47 +93,45 @@ func DockerCli(t *testing.T) *dockerClient.Client {
 	return dockerCliVal
 }
 
-var runRegistryName, runRegistryPort string
-var runRegistryOnce sync.Once
-
-func RunRegistry(t *testing.T, seedRegistry bool) (localPort string) {
+func RunRegistry(t *testing.T, seedRegistry bool) (regsitry TestRegistry) {
 	t.Log("run registry")
 	t.Helper()
-	runRegistryOnce.Do(func() {
-		runRegistryName = "test-registry-" + RandString(10)
+	runRegistryName := "test-registry-" + RandString(10)
 
-		AssertNil(t, PullImage(DockerCli(t), "registry:2"))
-		ctx := context.Background()
-		ctr, err := DockerCli(t).ContainerCreate(ctx, &container.Config{
-			Image: "registry:2",
-		}, &container.HostConfig{
-			AutoRemove: true,
-			PortBindings: nat.PortMap{
-				"5000/tcp": []nat.PortBinding{{}},
-			},
-		}, nil, runRegistryName)
-		AssertNil(t, err)
-		defer DockerCli(t).ContainerRemove(ctx, ctr.ID, dockertypes.ContainerRemoveOptions{})
-		err = DockerCli(t).ContainerStart(ctx, ctr.ID, dockertypes.ContainerStartOptions{})
-		AssertNil(t, err)
+	AssertNil(t, PullImage(DockerCli(t), "registry:2"))
+	ctx := context.Background()
+	ctr, err := DockerCli(t).ContainerCreate(ctx, &container.Config{
+		Image: "registry:2",
+	}, &container.HostConfig{
+		AutoRemove: true,
+		PortBindings: nat.PortMap{
+			"5000/tcp": []nat.PortBinding{{}},
+		},
+	}, nil, runRegistryName)
+	AssertNil(t, err)
+	defer DockerCli(t).ContainerRemove(ctx, ctr.ID, dockertypes.ContainerRemoveOptions{})
+	err = DockerCli(t).ContainerStart(ctx, ctr.ID, dockertypes.ContainerStartOptions{})
+	AssertNil(t, err)
 
-		inspect, err := DockerCli(t).ContainerInspect(context.TODO(), ctr.ID)
-		AssertNil(t, err)
-		runRegistryPort = inspect.NetworkSettings.Ports["5000/tcp"][0].HostPort
+	inspect, err := DockerCli(t).ContainerInspect(context.TODO(), ctr.ID)
+	AssertNil(t, err)
+	runRegistryPort := inspect.NetworkSettings.Ports["5000/tcp"][0].HostPort
 
-		Eventually(t, func() bool {
-			txt, err := HttpGetE(fmt.Sprintf("http://localhost:%s/v2/", runRegistryPort))
-			return err == nil && txt != ""
-		}, 100*time.Millisecond, 10*time.Second)
+	Eventually(t, func() bool {
+		txt, err := HttpGetE(fmt.Sprintf("http://localhost:%s/v2/", runRegistryPort))
+		return err == nil && txt != ""
+	}, 100*time.Millisecond, 10*time.Second)
 
-		if seedRegistry {
-			t.Log("seed registry")
-			for _, f := range []func(*testing.T, string) string{DefaultBuildImage, DefaultRunImage, DefaultBuilderImage} {
-				AssertNil(t, pushImage(DockerCli(t), f(t, runRegistryPort)))
-			}
+	if seedRegistry {
+		t.Log("seed registry")
+		for _, f := range []func(*testing.T, string) string{DefaultBuildImage, DefaultRunImage, DefaultBuilderImage} {
+			AssertNil(t, pushImage(DockerCli(t), f(t, runRegistryPort)))
 		}
-	})
-	return runRegistryPort
+	}
+	return TestRegistry{
+		Port: runRegistryPort,
+		Name: runRegistryName,
+	}
 }
 
 func Eventually(t *testing.T, test func() bool, every time.Duration, timeout time.Duration) {
@@ -154,13 +154,11 @@ func Eventually(t *testing.T, test func() bool, every time.Duration, timeout tim
 	}
 }
 
-func StopRegistry(t *testing.T) {
+func StopRegistry(t *testing.T, registry TestRegistry) {
 	t.Log("stop registry")
 	t.Helper()
-	if runRegistryName != "" {
-		DockerCli(t).ContainerKill(context.Background(), runRegistryName, "SIGKILL")
-		DockerCli(t).ContainerRemove(context.TODO(), runRegistryName, dockertypes.ContainerRemoveOptions{Force: true})
-	}
+	DockerCli(t).ContainerKill(context.Background(), registry.Name, "SIGKILL")
+	DockerCli(t).ContainerRemove(context.TODO(), registry.Name, dockertypes.ContainerRemoveOptions{Force: true})
 }
 
 var getBuildImageOnce sync.Once

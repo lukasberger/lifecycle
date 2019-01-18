@@ -24,14 +24,14 @@ import (
 	h "github.com/buildpack/lifecycle/testhelpers"
 )
 
-var registryPort string
+var registryForRemoteTest h.TestRegistry
 
 func TestRemote(t *testing.T) {
 	t.Parallel()
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	registryPort = h.RunRegistry(t, false)
-	defer h.StopRegistry(t)
+	registryForRemoteTest = h.RunRegistry(t, false)
+	defer h.StopRegistry(t, registryForRemoteTest)
 
 	spec.Run(t, "remote", testRemote, spec.Sequential(), spec.Report(report.Terminal{}))
 }
@@ -49,7 +49,7 @@ func testRemote(t *testing.T, when spec.G, it spec.S) {
 			Docker: dockerCli,
 			FS:     &fs.FS{},
 		}
-		repoName = "localhost:" + registryPort + "/pack-image-test-" + h.RandString(10)
+		repoName = "localhost:" + registryForRemoteTest.Port + "/pack-image-test-" + h.RandString(10)
 	})
 
 	when("#label", func() {
@@ -287,7 +287,7 @@ func testRemote(t *testing.T, when spec.G, it spec.S) {
 				var wg sync.WaitGroup
 				wg.Add(1)
 
-				newBase = "localhost:" + registryPort + "/pack-newbase-test-" + h.RandString(10)
+				newBase = "localhost:" + registryForRemoteTest.Port + "/pack-newbase-test-" + h.RandString(10)
 				go func() {
 					defer wg.Done()
 					h.CreateImageOnRemote(t, dockerCli, newBase, fmt.Sprintf(`
@@ -299,7 +299,7 @@ func testRemote(t *testing.T, when spec.G, it spec.S) {
 					newBaseLayers = manifestLayers(t, newBase)
 				}()
 
-				oldBase = "localhost:" + registryPort + "/pack-oldbase-test-" + h.RandString(10)
+				oldBase = "localhost:" + registryForRemoteTest.Port + "/pack-oldbase-test-" + h.RandString(10)
 				oldTopLayer = h.CreateImageOnRemote(t, dockerCli, oldBase, fmt.Sprintf(`
 					FROM busybox
 					LABEL repo_name_for_randomisation=%s
@@ -509,37 +509,6 @@ func testRemote(t *testing.T, when spec.G, it spec.S) {
 				label := remoteLabel(t, dockerCli, repoName+"@"+imgDigest, "mykey")
 				h.AssertEq(t, "newValue", label)
 
-			})
-		})
-	})
-
-	when("#Found", func() {
-		when("it exists", func() {
-			it.Before(func() {
-				h.CreateImageOnRemote(t, dockerCli, repoName, fmt.Sprintf(`
-					FROM scratch
-					LABEL repo_name_for_randomisation=%s
-				`, repoName))
-			})
-
-			it("returns true, nil", func() {
-				image, err := factory.NewRemote(repoName)
-				h.AssertNil(t, err)
-				exists, err := image.Found()
-
-				h.AssertNil(t, err)
-				h.AssertEq(t, exists, true)
-			})
-		})
-
-		when("it does not exist", func() {
-			it("returns false, nil", func() {
-				image, err := factory.NewRemote(repoName)
-				h.AssertNil(t, err)
-				exists, err := image.Found()
-
-				h.AssertNil(t, err)
-				h.AssertEq(t, exists, false)
 			})
 		})
 	})

@@ -83,8 +83,8 @@ func (r *remote) Name() string {
 	return r.RepoName
 }
 
-func (r *remote) Found() (bool, error) {
-	if _, err := r.Image.RawManifest(); err != nil {
+func v1ImageFound(image v1.Image) (bool, error) {
+	if _, err := image.RawManifest(); err != nil {
 		if remoteErr, ok := err.(*v1remote.Error); ok && len(remoteErr.Errors) > 0 {
 			switch remoteErr.Errors[0].Code {
 			case v1remote.UnauthorizedErrorCode, v1remote.ManifestUnknownErrorCode:

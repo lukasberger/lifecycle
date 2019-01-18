@@ -24,9 +24,13 @@ import (
 	h "github.com/buildpack/lifecycle/testhelpers"
 )
 
-func TestLocal(t *testing.T) {
+var registryForLocalTest h.TestRegistry
+
+func TestImage(t *testing.T) {
 	t.Parallel()
 	rand.Seed(time.Now().UTC().UnixNano())
+	registryForLocalTest = h.RunRegistry(t, false)
+	defer h.StopRegistry(t, registryForLocalTest)
 	spec.Run(t, "local", testLocal, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
@@ -44,6 +48,53 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 			FS:     &fs.FS{},
 		}
 		repoName = "pack-image-test-" + h.RandString(10)
+	})
+
+	when("#NewLocal", func() {
+		when("pull is true", func() {
+			var remoteImageName string
+			it.Before(func() {
+				remoteImageName = fmt.Sprintf("localhost:%s/", registryForLocalTest.Port) + repoName
+			})
+			when("there is a remote image", func() {
+				it.Before(func() {
+					h.CreateImageOnRemote(t, dockerCli, remoteImageName, fmt.Sprintf(`
+					FROM scratch
+					LABEL repo_name_for_randomisation=%s
+					LABEL remotekey=remoteval
+				`, remoteImageName))
+				})
+
+				it("pulls the image", func() {
+					img, err := factory.NewLocal(remoteImageName, true)
+					h.AssertNil(t, err)
+					val, err := img.Label("remotekey")
+					h.AssertNil(t, err)
+					h.AssertEq(t, val, "remoteval")
+				})
+			})
+
+			when("there is no remote image", func() {
+				it("initializes an empty image", func() {
+					img, err := factory.NewLocal(remoteImageName, true)
+					h.AssertNil(t, err)
+
+					t.Log("check that the empty image is useable image")
+					h.AssertNil(t, img.SetLabel("some-key", "some-val"))
+					_, err = img.Save()
+					h.AssertNil(t, err)
+				})
+			})
+
+			when("there is an error checking for the remote image", func() {
+				it("returns an error", func() {
+					_, err := factory.NewLocal("bad.registry.com/"+repoName, true)
+					if err == nil {
+						t.Fatal("expected an error")
+					}
+				})
+			})
+		})
 	})
 
 	when("#label", func() {
@@ -80,12 +131,13 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 		})
 
 		when("image NOT exists", func() {
-			it("returns an error", func() {
+			it("returns an empty string", func() {
 				img, err := factory.NewLocal(repoName, false)
 				h.AssertNil(t, err)
 
-				_, err = img.Label("mykey")
-				h.AssertError(t, err, fmt.Sprintf("failed to get label, image '%s' does not exist", repoName))
+				label, err := img.Label("mykey")
+				h.AssertNil(t, err)
+				h.AssertEq(t, label, "")
 			})
 		})
 	})
@@ -113,7 +165,7 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 				h.AssertEq(t, val, "my_val")
 			})
 
-			it("returns an empty string for a missing label", func() {
+			it("returns an empty string for a missing env var", func() {
 				img, err := factory.NewLocal(repoName, false)
 				h.AssertNil(t, err)
 
@@ -124,12 +176,13 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 		})
 
 		when("image NOT exists", func() {
-			it("returns an error", func() {
+			it("returns an returns an empty string", func() {
 				img, err := factory.NewLocal(repoName, false)
 				h.AssertNil(t, err)
 
-				_, err = img.Env("MISSING_VAR")
-				h.AssertError(t, err, fmt.Sprintf("failed to get env var, image '%s' does not exist", repoName))
+				val, err := img.Env("SOME_VAR")
+				h.AssertNil(t, err)
+				h.AssertEq(t, val, "")
 			})
 		})
 	})
@@ -596,39 +649,6 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 				h.AssertNil(t, err)
 				label := inspect.Config.Labels["mykey"]
 				h.AssertEq(t, strings.TrimSpace(label), "newValue")
-			})
-		})
-	})
-
-	when("#Found", func() {
-		when("it exists", func() {
-			it.Before(func() {
-				h.CreateImageOnLocal(t, dockerCli, repoName, fmt.Sprintf(`
-					FROM scratch
-					LABEL repo_name_for_randomisation=%s
-				`, repoName))
-			})
-
-			it.After(func() {
-				h.DockerRmi(dockerCli, repoName)
-			})
-
-			it("returns true, nil", func() {
-				image, err := factory.NewLocal(repoName, false)
-				exists, err := image.Found()
-
-				h.AssertNil(t, err)
-				h.AssertEq(t, exists, true)
-			})
-		})
-
-		when("it does not exist", func() {
-			it("returns false, nil", func() {
-				image, err := factory.NewLocal(repoName, false)
-				exists, err := image.Found()
-
-				h.AssertNil(t, err)
-				h.AssertEq(t, exists, false)
 			})
 		})
 	})
