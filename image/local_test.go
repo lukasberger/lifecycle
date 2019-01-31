@@ -1,6 +1,7 @@
 package image_test
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
 	"io"
@@ -503,6 +504,39 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 			output, err = h.CopySingleFileFromImage(dockerCli, repoName, "new-layer.txt")
 			h.AssertNil(t, err)
 			h.AssertEq(t, output, "new-layer")
+		})
+	})
+
+	when("#GetLayer", func() {
+		it.Before(func() {
+			h.CreateImageOnLocal(t, dockerCli, repoName, fmt.Sprintf(`
+					FROM busybox
+					LABEL repo_name_for_randomisation=%s
+					RUN mkdir /dir && echo -n file-contents > /dir/file.txt
+				`, repoName))
+		})
+
+		when("the layer exists", func() {
+			it("returns a layer tar", func() {
+				img, err := factory.NewLocal(repoName, false)
+				topLayer, err := img.TopLayer()
+				h.AssertNil(t, err)
+				r, err := img.GetLayer(topLayer)
+				h.AssertNil(t, err)
+				tr := tar.NewReader(r)
+				header, err := tr.Next()
+				h.AssertNil(t, err)
+				h.AssertEq(t, header.Name, "dir/")
+				header, err = tr.Next()
+				h.AssertNil(t, err)
+				h.AssertEq(t, header.Name, "dir/file.txt")
+				contents :=  make([]byte, len("file-contents"), len("file-contents"))
+				_, err = tr.Read(contents)
+				if err != io.EOF {
+					t.Fatalf("expected end of file: %x", err)
+				}
+				h.AssertEq(t, string(contents), "file-contents")
+			})
 		})
 	})
 

@@ -223,6 +223,16 @@ func (l *local) TopLayer() (string, error) {
 	return topLayer, nil
 }
 
+func (l *local) GetLayer(sha string) (io.ReadCloser, error) {
+	l.prevDownload()
+	layerID := l.prevMap[sha]
+	rc, err := os.Open(filepath.Join(l.prevDir, layerID))
+	if err != nil {
+		return nil, err
+	}
+	return rc, nil
+}
+
 func (l *local) AddLayer(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
