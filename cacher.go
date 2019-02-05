@@ -20,8 +20,8 @@ import (
 type Cacher struct {
 	ArtifactsDir string
 	Buildpacks   []*Buildpack
-	Out, Err          *log.Logger
-	UID, GID          int
+	Out, Err     *log.Logger
+	UID, GID     int
 }
 
 func (c *Cacher) Cache(layersDir string, oldCacheImage, newCacheImage image.Image) error {
@@ -45,9 +45,9 @@ func (c *Cacher) Cache(layersDir string, oldCacheImage, newCacheImage image.Imag
 			return err
 		}
 		bpMetadata := BuildpackMetadata{
-			ID: bp.ID,
+			ID:      bp.ID,
 			Version: bp.Version,
-			Layers: map[string]LayerMetadata{},
+			Layers:  map[string]LayerMetadata{},
 		}
 		for _, l := range bpDir.findLayers(cached) {
 			metadata, err := l.read()

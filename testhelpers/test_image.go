@@ -97,7 +97,7 @@ func (f *FakeImage) TopLayer() (string, error) {
 func (f *FakeImage) AddLayer(path string) error {
 	f.assertNotAlreadySaved()
 
-	f.layersMap[ComputeSHA256ForFile(f.t, path)] = path
+	f.layersMap["sha256:"+ComputeSHA256ForFile(f.t, path)] = path
 	f.layers = append(f.layers, path)
 	return nil
 }

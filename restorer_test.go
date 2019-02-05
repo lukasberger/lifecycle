@@ -131,14 +131,14 @@ func testRestorer(t *testing.T, when spec.G, it spec.S) {
 				            "cache-only-key": "cache-only-val"
 				          },
 				          "cache": true,
-				          "sha": "%s"
+				          "sha": "sha256:%s"
 				        },
                         "cache-false": {
 				          "data": {
 				            "cache-false-key": "cache-false-val"
 				          },
 				          "cache": false,
-				          "sha": "%s"
+				          "sha": "sha256:%s"
 				        },
 						"cache-launch": {
 				          "data": {
@@ -146,7 +146,7 @@ func testRestorer(t *testing.T, when spec.G, it spec.S) {
 				          },
 				          "cache": true,
 						  "launch": true,
-				          "sha": "%s"
+				          "sha": "sha256:%s"
 				        }
 				      }
 				    }, {
@@ -157,7 +157,7 @@ func testRestorer(t *testing.T, when spec.G, it spec.S) {
 				            "no-group-key": "no-group-val"
 				          },
 				          "cache": true,
-				          "sha": "%s"
+				          "sha": "sha256:%s"
 				        }
 				      }
                     }, {
@@ -168,7 +168,7 @@ func testRestorer(t *testing.T, when spec.G, it spec.S) {
 				            "escaped-bp-key": "escaped-bp-val"
 				          },
 				          "cache": true,
-				          "sha": "%s"
+				          "sha": "sha256:%s"
 				        }
 				      }
 					}
@@ -215,11 +215,10 @@ func testRestorer(t *testing.T, when spec.G, it spec.S) {
 					t.Fatalf(`Error: expected '%s' to contain '%s'`, txt, expectedText)
 				}
 
-				expectedText = "echo text from cache launch layer"
 				if sha, err := ioutil.ReadFile(filepath.Join(layersDir, "buildpack.id", "cache-launch.sha")); err != nil {
 					t.Fatalf("failed to read cache-launch.sha: %s", err)
-				} else if string(sha) != cacheLaunchLayerSHA {
-					t.Fatalf(`Error: expected '%s' to be equal to '%s'`, sha, cacheLaunchLayerSHA)
+				} else if string(sha) != "sha256:"+ cacheLaunchLayerSHA {
+					t.Fatalf(`Error: expected '%s' to be equal to 'sha256:%s'`, sha, cacheLaunchLayerSHA)
 				}
 			})
 
