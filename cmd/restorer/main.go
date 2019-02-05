@@ -1,4 +1,4 @@
-package restorer
+package main
 
 import (
 	"flag"
@@ -55,6 +55,8 @@ func restore() error {
 		return err
 	}
 
-	restorer.Restore(cacheImage)
+	if err := restorer.Restore(cacheImage); err != nil {
+		return cmd.FailErrCode(err, cmd.CodeFailed)
+	}
 	return nil
 }
