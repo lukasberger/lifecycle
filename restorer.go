@@ -10,7 +10,7 @@ import (
 
 type Restorer struct {
 	LayersDir  string
-	Buildpacks []string
+	Buildpacks []*Buildpack
 	Out, Err   *log.Logger
 }
 
@@ -27,15 +27,26 @@ func (r *Restorer) Restore(cacheImage image.Image) error {
 		return err
 	}
 	archiver := &fs.FS{}
-	for _, bp := range metadata.Buildpacks {
-		layersDir, err := readBuildpackLayersDir(r.LayersDir, bp.ID)
+	for _, bp := range r.Buildpacks {
+		layersDir, err := readBuildpackLayersDir(r.LayersDir, bp.EscapedID())
 		if err != nil {
 			return err
 		}
-		for name, layer := range bp.Layers {
+		layersToRestore := r.layersToRestore(bp.ID, *metadata)
+		for name, layer := range layersToRestore {
+			if !layer.Cache {
+				continue
+			}
+
 			r.Out.Printf("writing metadata for cached layer '%s:%s'", bp.ID, name)
-			if err := layersDir.newBPLayer(name).writeMetadata(bp.Layers); err != nil {
+			bpLayer := layersDir.newBPLayer(name)
+			if err := bpLayer.writeMetadata(layersToRestore); err != nil {
 				return err
+			}
+			if layer.Launch {
+				if err := bpLayer.writeSha(layer.SHA); err != nil {
+					return err
+				}
 			}
 			rc, err := cacheImage.GetLayer(layer.SHA)
 			if err != nil {
@@ -48,6 +59,16 @@ func (r *Restorer) Restore(cacheImage image.Image) error {
 		}
 	}
 	return nil
+}
+
+func (r *Restorer) layersToRestore(buildpackID string, metadata AppImageMetadata) map[string]LayerMetadata {
+	layers := make(map[string]LayerMetadata)
+	for _, bp := range metadata.Buildpacks {
+		if bp.ID == buildpackID {
+			return bp.Layers
+		}
+	}
+	return layers
 }
 
 
