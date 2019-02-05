@@ -20,10 +20,8 @@ import (
 type Cacher struct {
 	ArtifactsDir string
 	Buildpacks   []*Buildpack
-	Out          *log.Logger
-	Err          *log.Logger
-	UID          int
-	GID          int
+	Out, Err          *log.Logger
+	UID, GID          int
 }
 
 func (c *Cacher) Cache(layersDir string, oldCacheImage, newCacheImage image.Image) error {
@@ -103,7 +101,7 @@ func (c *Cacher) exportTar(sourceDir string) (string, error) {
 	w := io.MultiWriter(hasher, f)
 
 	fs := &fs.FS{}
-	err = fs.WriteTarArchive(w, sourceDir, 0, 0)
+	err = fs.WriteTarArchive(w, sourceDir, c.UID, c.GID)
 	if err != nil {
 		return "", err
 	}
