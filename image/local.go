@@ -225,7 +225,10 @@ func (l *local) TopLayer() (string, error) {
 
 func (l *local) GetLayer(sha string) (io.ReadCloser, error) {
 	l.prevDownload()
-	layerID := l.prevMap[sha]
+	layerID, ok := l.prevMap[sha]
+	if !ok {
+		return nil, fmt.Errorf("image '%s' does not contain layer with diff ID '%s'", l.RepoName, sha)
+	}
 	rc, err := os.Open(filepath.Join(l.prevDir, layerID))
 	if err != nil {
 		return nil, err
