@@ -14,13 +14,12 @@ import (
 	"github.com/buildpack/lifecycle/image"
 )
 
-
 var (
 	cacheImageTag string
-	layersDir   string
-	groupPath   string
-	uid         int
-	gid         int
+	layersDir     string
+	groupPath     string
+	uid           int
+	gid           int
 )
 
 func init() {

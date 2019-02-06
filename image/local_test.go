@@ -47,7 +47,7 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 		repoName = "pack-image-test-" + h.RandString(10)
 	})
 
-	when("#NewEmptyLocal", func(){
+	when("#NewEmptyLocal", func() {
 		it("returns a scratch image", func() {
 			img := factory.NewEmptyLocal(repoName)
 
@@ -531,7 +531,7 @@ func testLocal(t *testing.T, when spec.G, it spec.S) {
 				header, err = tr.Next()
 				h.AssertNil(t, err)
 				h.AssertEq(t, header.Name, "dir/file.txt")
-				contents :=  make([]byte, len("file-contents"), len("file-contents"))
+				contents := make([]byte, len("file-contents"), len("file-contents"))
 				_, err = tr.Read(contents)
 				if err != io.EOF {
 					t.Fatalf("expected end of file: %x", err)

@@ -217,7 +217,7 @@ func testRestorer(t *testing.T, when spec.G, it spec.S) {
 
 				if sha, err := ioutil.ReadFile(filepath.Join(layersDir, "buildpack.id", "cache-launch.sha")); err != nil {
 					t.Fatalf("failed to read cache-launch.sha: %s", err)
-				} else if string(sha) != "sha256:"+ cacheLaunchLayerSHA {
+				} else if string(sha) != "sha256:"+cacheLaunchLayerSHA {
 					t.Fatalf(`Error: expected '%s' to be equal to 'sha256:%s'`, sha, cacheLaunchLayerSHA)
 				}
 			})
