@@ -1,14 +1,8 @@
 package lifecycle
 
 import (
-	"encoding/json"
-	"log"
-	"os"
-	"path/filepath"
-
-	"github.com/pkg/errors"
-
 	"github.com/buildpack/lifecycle/image"
+	"log"
 )
 
 type Analyzer struct {
@@ -29,7 +23,7 @@ func (a *Analyzer) Analyze(image image.Image) error {
 	if !found {
 		a.Out.Printf("WARNING: image '%s' not found or requires authentication to access\n", image.Name())
 	} else {
-		metadata, err = a.getMetadata(image)
+		metadata, err = getMetadata(image, a.Out)
 		if err != nil {
 			return err
 		}
@@ -39,19 +33,13 @@ func (a *Analyzer) Analyze(image image.Image) error {
 
 func (a *Analyzer) analyze(metadata AppImageMetadata) error {
 	groupBPs := a.buildpacks()
-
-	err := a.removeOldBackpackLayersNotInGroup(groupBPs)
-	if err != nil {
-		return err
-	}
-
 	for buildpackID := range groupBPs {
 		cache, err := readBuildpackLayersDir(a.LayersDir, buildpackID)
 		if err != nil {
 			return err
 		}
 
-		metadataLayers := a.layersToAnalyze(buildpackID, metadata)
+		metadataLayers := metadata.metadataForBuildpack(buildpackID).Layers
 		for _, cachedLayer := range cache.layers {
 			cacheType := cachedLayer.classifyCache(metadataLayers)
 			switch cacheType {
@@ -94,78 +82,10 @@ func (a *Analyzer) analyze(metadata AppImageMetadata) error {
 	return nil
 }
 
-func (a *Analyzer) layersToAnalyze(buildpackID string, metadata AppImageMetadata) map[string]LayerMetadata {
-	layers := make(map[string]LayerMetadata)
-	for _, bp := range metadata.Buildpacks {
-		if bp.ID == buildpackID {
-			return bp.Layers
-		}
-	}
-	return layers
-}
-
-func (a *Analyzer) getMetadata(image image.Image) (AppImageMetadata, error) {
-	metadata := AppImageMetadata{}
-	label, err := image.Label(MetadataLabel)
-	if err != nil {
-		return metadata, err
-	}
-	if label == "" {
-		a.Out.Printf("WARNING: previous image '%s' does not have '%s' label", image.Name(), MetadataLabel)
-		return metadata, nil
-	}
-
-	if err := json.Unmarshal([]byte(label), &metadata); err != nil {
-		a.Out.Printf("WARNING: previous image '%s' has incompatible '%s' label\n", image.Name(), MetadataLabel)
-		return metadata, nil
-	}
-	return metadata, nil
-}
-
 func (a *Analyzer) buildpacks() map[string]struct{} {
 	buildpacks := make(map[string]struct{}, len(a.Buildpacks))
 	for _, b := range a.Buildpacks {
 		buildpacks[b.EscapedID()] = struct{}{}
 	}
 	return buildpacks
-}
-
-func (a *Analyzer) removeOldBackpackLayersNotInGroup(groupBPs map[string]struct{}) error {
-	cachedBPs, err := a.cachedBuildpacks()
-	if err != nil {
-		return err
-	}
-
-	for _, cachedBP := range cachedBPs {
-		_, exists := groupBPs[cachedBP]
-		if !exists {
-			a.Out.Printf("removing cached layers for buildpack '%s' not in group\n", cachedBP)
-			if err := os.RemoveAll(filepath.Join(a.LayersDir, cachedBP)); err != nil && !os.IsNotExist(err) {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (a *Analyzer) cachedBuildpacks() ([]string, error) {
-	cachedBps := make([]string, 0, 0)
-	bpDirs, err := filepath.Glob(filepath.Join(a.LayersDir, "*"))
-	if err != nil {
-		return nil, err
-	}
-	appDirInfo, err := os.Stat(a.AppDir)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrap(err, "stat app dir")
-	}
-	for _, dir := range bpDirs {
-		info, err := os.Stat(dir)
-		if err != nil {
-			return nil, err
-		}
-		if !os.SameFile(appDirInfo, info) && info.IsDir() {
-			cachedBps = append(cachedBps, filepath.Base(dir))
-		}
-	}
-	return cachedBps, nil
 }

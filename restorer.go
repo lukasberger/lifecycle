@@ -1,7 +1,6 @@
 package lifecycle
 
 import (
-	"encoding/json"
 	"log"
 
 	"github.com/buildpack/lifecycle/fs"
@@ -19,12 +18,8 @@ func (r *Restorer) Restore(cacheImage image.Image) error {
 		r.Out.Printf("cache image '%s' not found, nothing to restore", cacheImage.Name())
 		return nil
 	}
-	metadata := &AppImageMetadata{}
-	label, err := cacheImage.Label(MetadataLabel)
+	metadata, err := getMetadata(cacheImage, r.Out)
 	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal([]byte(label), metadata); err != nil {
 		return err
 	}
 	archiver := &fs.FS{}
@@ -33,9 +28,8 @@ func (r *Restorer) Restore(cacheImage image.Image) error {
 		if err != nil {
 			return err
 		}
-		layersToRestore := r.layersToRestore(bp.ID, *metadata)
-		r.Out.Printf("found layers '%+v' for buildpack '%s'", layersToRestore, bp.ID)
-		for name, layer := range layersToRestore {
+		bpMD := metadata.metadataForBuildpack(bp.ID)
+		for name, layer := range bpMD.Layers {
 			if !layer.Cache {
 				r.Out.Printf("skipping cache=false layer '%s:%s'", bp.ID, name)
 				continue
@@ -43,7 +37,7 @@ func (r *Restorer) Restore(cacheImage image.Image) error {
 
 			r.Out.Printf("restoring cached layer '%s:%s'", bp.ID, name)
 			bpLayer := layersDir.newBPLayer(name)
-			if err := bpLayer.writeMetadata(layersToRestore); err != nil {
+			if err := bpLayer.writeMetadata(bpMD.Layers); err != nil {
 				return err
 			}
 			if layer.Launch {
@@ -62,14 +56,4 @@ func (r *Restorer) Restore(cacheImage image.Image) error {
 		}
 	}
 	return nil
-}
-
-func (r *Restorer) layersToRestore(buildpackID string, metadata AppImageMetadata) map[string]LayerMetadata {
-	layers := make(map[string]LayerMetadata)
-	for _, bp := range metadata.Buildpacks {
-		if bp.ID == buildpackID {
-			return bp.Layers
-		}
-	}
-	return layers
 }
