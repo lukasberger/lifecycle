@@ -2,8 +2,9 @@ package lifecycle
 
 import (
 	"encoding/json"
-	"github.com/buildpack/lifecycle/image"
 	"log"
+
+	"github.com/buildpack/lifecycle/image"
 )
 
 const (
@@ -60,6 +61,12 @@ func (m *AppImageMetadata) metadataForBuildpack(id string) BuildpackMetadata {
 
 func getMetadata(image image.Image, log *log.Logger) (AppImageMetadata, error) {
 	metadata := AppImageMetadata{}
+	if found, err := image.Found(); err != nil {
+		return metadata, err
+	} else if !found {
+		log.Printf("WARNING: image '%s' not found or requires authentication to access\n", image.Name())
+		return metadata, nil
+	}
 	label, err := image.Label(MetadataLabel)
 	if err != nil {
 		return metadata, err

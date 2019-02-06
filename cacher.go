@@ -30,7 +30,7 @@ func (c *Cacher) Cache(layersDir string, oldCacheImage, newCacheImage image.Imag
 		image: newCacheImage,
 	}
 
-	origMetadata, err := c.getImageMetadata(oldCacheImage)
+	origMetadata, err := getMetadata(oldCacheImage, c.Out)
 	if err != nil {
 		return errors.Wrap(err, "metadata for previous image")
 	}
@@ -40,7 +40,7 @@ func (c *Cacher) Cache(layersDir string, oldCacheImage, newCacheImage image.Imag
 	}
 
 	for _, bp := range c.Buildpacks {
-		bpDir, err := readBuildpackLayersDir(layersDir, bp.EscapedID())
+		bpDir, err := readBuildpackLayersDir(layersDir, *bp)
 		if err != nil {
 			return err
 		}
@@ -74,21 +74,14 @@ func (c *Cacher) Cache(layersDir string, oldCacheImage, newCacheImage image.Imag
 }
 
 func (c *Cacher) addOrReuseLayer(image *loggingImage, layer bpLayer, previousSHA string) (string, error) {
-	md, err := layer.read()
+	sha, err := c.exportTar(layer.Path())
 	if err != nil {
-		return "", err
+		return "", errors.Wrapf(err, "exporting layer '%s'", layer.Identifier())
 	}
-	if md.SHA == "" || md.SHA != previousSHA {
-		md.SHA, err = c.exportTar(layer.Path())
-		if err != nil {
-			return "", errors.Wrapf(err, "caching layer '%s'", layer.Identifier())
-		}
+	if sha == previousSHA {
+		return sha, image.ReuseLayer(layer.Identifier(), previousSHA)
 	}
-
-	if md.SHA == previousSHA {
-		return md.SHA, image.ReuseLayer(layer.Identifier(), previousSHA)
-	}
-	return md.SHA, image.AddLayer(layer.Identifier(), md.SHA, c.tarPath(md.SHA))
+	return sha, image.AddLayer(layer.Identifier(), sha, c.tarPath(sha))
 }
 
 func (c *Cacher) exportTar(sourceDir string) (string, error) {
@@ -119,22 +112,4 @@ func (c *Cacher) exportTar(sourceDir string) (string, error) {
 
 func (c *Cacher) tarPath(sha string) string {
 	return filepath.Join(c.ArtifactsDir, strings.TrimPrefix(sha, "sha256:")+".tar")
-}
-
-func (c *Cacher) getImageMetadata(image image.Image) (AppImageMetadata, error) {
-	var metadata AppImageMetadata
-	found, err := image.Found()
-	if err != nil {
-		return metadata, errors.Wrap(err, "looking for image")
-	}
-	if found {
-		label, err := image.Label(MetadataLabel)
-		if err != nil {
-			return metadata, errors.Wrap(err, "getting metadata")
-		}
-		if err := json.Unmarshal([]byte(label), &metadata); err != nil {
-			return metadata, err
-		}
-	}
-	return metadata, nil
 }

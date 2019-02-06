@@ -24,19 +24,18 @@ func (r *Restorer) Restore(cacheImage image.Image) error {
 	}
 	archiver := &fs.FS{}
 	for _, bp := range r.Buildpacks {
-		layersDir, err := readBuildpackLayersDir(r.LayersDir, bp.EscapedID())
+		layersDir, err := readBuildpackLayersDir(r.LayersDir, *bp)
 		if err != nil {
 			return err
 		}
 		bpMD := metadata.metadataForBuildpack(bp.ID)
 		for name, layer := range bpMD.Layers {
 			if !layer.Cache {
-				r.Out.Printf("skipping cache=false layer '%s:%s'", bp.ID, name)
 				continue
 			}
 
-			r.Out.Printf("restoring cached layer '%s:%s'", bp.ID, name)
 			bpLayer := layersDir.newBPLayer(name)
+			r.Out.Printf("restoring cached layer '%s'", bpLayer.Identifier())
 			if err := bpLayer.writeMetadata(bpMD.Layers); err != nil {
 				return err
 			}

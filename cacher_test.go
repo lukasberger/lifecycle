@@ -60,6 +60,7 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 				mockNonExistingOriginalImage.EXPECT().Found().Return(false, nil)
 				mockNonExistingOriginalImage.EXPECT().Label("io.buildpacks.lifecycle.metadata").
 					Return("", errors.New("not exist")).AnyTimes()
+				mockNonExistingOriginalImage.EXPECT().Name().Return("existing-previous-cache-image").AnyTimes()
 			})
 
 			it("exports cached layers to an image", func() {
@@ -148,17 +149,6 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 					))
 				})
 
-				it("reuses layers when the existing sha matches previous metadata", func() {
-					cacheImage := h.NewFakeImage(t, "cache-image", "", "")
-					err := cacher.Cache(layersDir, fakeOriginalImage, cacheImage)
-					h.AssertNil(t, err)
-
-					reusedLayers := cacheImage.ReusedLayers()
-					h.AssertEq(t, len(reusedLayers), 2)
-					h.AssertContains(t, reusedLayers, cacheTrueLayerSHA)
-					h.AssertEq(t, cacheImage.IsSaved(), true)
-				})
-
 				it("reuses layers when the calculated sha matches previous metadata", func() {
 					cacheImage := h.NewFakeImage(t, "cache-image", "", "")
 					err := cacher.Cache(layersDir, fakeOriginalImage, cacheImage)
@@ -232,6 +222,9 @@ func testCacher(t *testing.T, when spec.G, it spec.S) {
 					h.AssertEq(t, cacheImage.IsSaved(), true)
 				})
 			})
+
+			// TODO layers without contents?
+			// TODO test uid/gid
 		})
 	})
 }

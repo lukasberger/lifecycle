@@ -11,13 +11,14 @@ import (
 )
 
 type bpLayersDir struct {
-	path   string
-	layers []bpLayer
-	name   string
+	path      string
+	layers    []bpLayer
+	name      string
+	buildpack Buildpack
 }
 
-func readBuildpackLayersDir(layersDir, buildpackID string) (bpLayersDir, error) {
-	path := filepath.Join(layersDir, buildpackID)
+func readBuildpackLayersDir(layersDir string, buildpack Buildpack) (bpLayersDir, error) {
+	path := filepath.Join(layersDir, buildpack.EscapedID())
 	tomls, err := filepath.Glob(filepath.Join(path, "*.toml"))
 	if err != nil {
 		return bpLayersDir{}, err
@@ -27,15 +28,16 @@ func readBuildpackLayersDir(layersDir, buildpackID string) (bpLayersDir, error) 
 		name := strings.TrimRight(filepath.Base(toml), ".toml")
 		layers = append(layers, bpLayer{
 			layer{
-				path:       filepath.Join(layersDir, buildpackID, name),
-				identifier: fmt.Sprintf("%s/%s", buildpackID, name),
+				path:       filepath.Join(path, name),
+				identifier: fmt.Sprintf("%s:%s", buildpack.ID, name),
 			},
 		})
 	}
 	return bpLayersDir{
-		name:   buildpackID,
-		path:   path,
-		layers: layers,
+		buildpack: buildpack,
+		name:      buildpack.ID,
+		path:      path,
+		layers:    layers,
 	}, nil
 }
 
@@ -66,7 +68,7 @@ func (bd *bpLayersDir) newBPLayer(name string) *bpLayer {
 	return &bpLayer{
 		layer{
 			path:       filepath.Join(bd.path, name),
-			identifier: fmt.Sprintf("%s/%s", bd.name, name),
+			identifier: fmt.Sprintf("%s:%s", bd.buildpack.ID, name),
 		},
 	}
 }
