@@ -100,10 +100,6 @@ func FlagGID(gid *int) {
 	flag.IntVar(gid, "gid", intEnv(EnvGID), "GID of user's group in the stack's build and run images")
 }
 
-func FlagLabels(labels Labels) {
-	flag.Var(&labels, "label", "labels to include on the app image")
-}
-
 const (
 	CodeFailed      = 1
 	CodeInvalidArgs = iota + 2

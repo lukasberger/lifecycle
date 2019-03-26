@@ -21,7 +21,7 @@ type Exporter struct {
 	UID, GID     int
 }
 
-func (e *Exporter) Export(layersDir, appDir string, runImage, origImage image.Image, launcher string, labels cmd.Labels) error {
+func (e *Exporter) Export(layersDir, appDir string, runImage, origImage image.Image, launcher string, mirrors MirrorsType) error {
 	var err error
 	metadata := AppImageMetadata{}
 	metadata.RunImage.TopLayer, err = runImage.TopLayer()
@@ -113,20 +113,27 @@ func (e *Exporter) Export(layersDir, appDir string, runImage, origImage image.Im
 	if err := appImage.SetLabel(MetadataLabel, string(data)); err != nil {
 		return errors.Wrap(err, "set app image metadata label")
 	}
-	for k, v := range labels {
-		if err := appImage.SetLabel(k, v); err != nil {
-			return errors.Wrapf(err, "set app image label %s", k)
-		}
+
+	bytes, err := json.Marshal(RunImageType{RunImage: mirrors})
+	if err != nil {
+		return errors.Wrapf(err, "marshall run image mirrors")
 	}
+	if err := appImage.SetLabel("io.buildpacks.run-image.metadata", string(bytes)); err != nil {
+		return errors.Wrapf(err, "set app image label %s", "io.buildpacks.run-image.metadata")
+	}
+
 	if err := appImage.SetEnv(cmd.EnvLayersDir, layersDir); err != nil {
 		return errors.Wrapf(err, "set app image env %s", cmd.EnvLayersDir)
 	}
+
 	if err := appImage.SetEnv(cmd.EnvAppDir, appDir); err != nil {
 		return errors.Wrapf(err, "set app image env %s", cmd.EnvAppDir)
 	}
+
 	if err := appImage.SetEntrypoint(launcher); err != nil {
 		return errors.Wrap(err, "setting entrypoint")
 	}
+
 	if err := appImage.SetEmptyCmd(); err != nil {
 		return errors.Wrap(err, "setting cmd")
 	}
@@ -135,6 +142,7 @@ func (e *Exporter) Export(layersDir, appDir string, runImage, origImage image.Im
 	if err == nil {
 		e.Out.Printf("\n*** Image: %s@%s\n", runImage.Name(), sha)
 	}
+
 	return err
 }
 
