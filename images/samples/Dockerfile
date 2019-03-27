@@ -21,6 +21,6 @@ RUN \
 
 ARG run_image
 RUN echo "[run-image]\n  image = \"${run_image}\"\n  mirrors = []" >> /buildpacks/stack.toml
-LABEL io.buildpacks.builder.metadata="{\"runImage\": {\"image\": \"${run_image}\"}}"
+LABEL io.buildpacks.builder.metadata="{\"stack\":{\"runImage\": {\"image\": \"${run_image}\"}}}"
 
 USER pack
