@@ -16,6 +16,7 @@ const (
 	DefaultPlatformDir    = "/platform"
 	DefaultOrderPath      = "/buildpacks/order.toml"
 	DefaultGroupPath      = "./group.toml"
+	DefaultStackPath      = "/buildpacks/stack.toml"
 	DefaultPlanPath       = "./plan.toml"
 	DefaultUseDaemon      = false
 	DefaultUseCredHelpers = false
@@ -27,6 +28,7 @@ const (
 	EnvAppDir             = "PACK_APP_DIR"
 	EnvLegacyRegistryAuth = "PACK_REGISTRY_AUTH"
 	EnvRegistryAuth       = "CNB_REGISTRY_AUTH"
+	EnvStackPath          = "CNB_STACK_PATH"
 )
 
 type Labels map[string]string
@@ -70,6 +72,10 @@ func FlagOrderPath(path *string) {
 
 func FlagGroupPath(path *string) {
 	flag.StringVar(path, "group", DefaultGroupPath, "path to group.toml")
+}
+
+func FlagStackPath(path *string) {
+	flag.StringVar(path, "stack", envWithDefault(EnvStackPath, DefaultStackPath), "path to stack.toml")
 }
 
 func FlagPlanPath(path *string) {
@@ -159,4 +165,11 @@ func intEnv(k string) int {
 		return 0
 	}
 	return d
+}
+
+func envWithDefault(key string, defaultVal string) string {
+	if envVal := os.Getenv(key); envVal != "" {
+		return envVal
+	}
+	return defaultVal
 }

@@ -21,17 +21,22 @@ type Exporter struct {
 	UID, GID     int
 }
 
-func (e *Exporter) Export(layersDir, appDir string, runImage, origImage image.Image, launcher string, mirrors MirrorsType) error {
+func (e *Exporter) Export(layersDir, appDir string, runImage, origImage image.Image, launcher string, stack StackMetadata) error {
 	var err error
+
 	metadata := AppImageMetadata{}
+
 	metadata.RunImage.TopLayer, err = runImage.TopLayer()
 	if err != nil {
 		return errors.Wrap(err, "get run image top layer SHA")
 	}
+
 	metadata.RunImage.SHA, err = runImage.Digest()
 	if err != nil {
 		return errors.Wrap(err, "get run image digest")
 	}
+
+	metadata.Stack = stack
 
 	origMetadata, err := getAppMetadata(origImage, e.Out)
 	if err != nil {
@@ -112,14 +117,6 @@ func (e *Exporter) Export(layersDir, appDir string, runImage, origImage image.Im
 	}
 	if err := appImage.SetLabel(MetadataLabel, string(data)); err != nil {
 		return errors.Wrap(err, "set app image metadata label")
-	}
-
-	bytes, err := json.Marshal(RunImageType{RunImage: mirrors})
-	if err != nil {
-		return errors.Wrapf(err, "marshall run image mirrors")
-	}
-	if err := appImage.SetLabel("io.buildpacks.run-image.metadata", string(bytes)); err != nil {
-		return errors.Wrapf(err, "set app image label %s", "io.buildpacks.run-image.metadata")
 	}
 
 	if err := appImage.SetEnv(cmd.EnvLayersDir, layersDir); err != nil {

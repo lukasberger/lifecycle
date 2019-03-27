@@ -1,10 +1,8 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
-	"github.com/google/go-containerregistry/pkg/name"
 	"io/ioutil"
 	"log"
 	"os"
@@ -22,6 +20,7 @@ var (
 	layersDir   string
 	appDir      string
 	groupPath   string
+	stackPath   string
 	useDaemon   bool
 	useHelpers  bool
 	uid         int
@@ -35,6 +34,7 @@ func init() {
 	cmd.FlagLayersDir(&layersDir)
 	cmd.FlagAppDir(&appDir)
 	cmd.FlagGroupPath(&groupPath)
+	cmd.FlagStackPath(&stackPath)
 	cmd.FlagUseDaemon(&useDaemon)
 	cmd.FlagUseCredHelpers(&useHelpers)
 	cmd.FlagUID(&uid)
@@ -43,8 +43,8 @@ func init() {
 
 func main() {
 	flag.Parse()
-	if flag.NArg() > 1 || flag.Arg(0) == "" {
-		args := map[string]interface{}{"narg": flag.NArg(), "layersDir": layersDir}
+	if flag.NArg() > 1 || flag.Arg(0) == "" || runImageRef == "" {
+		args := map[string]interface{}{"narg": flag.NArg(), "runImage": runImageRef, "layersDir": layersDir}
 		cmd.Exit(cmd.FailCode(cmd.CodeInvalidArgs, "parse arguments", fmt.Sprintf("%+v", args)))
 	}
 	repoName = flag.Arg(0)
@@ -71,10 +71,12 @@ func export() error {
 	}
 	defer os.RemoveAll(artifactsDir)
 
+	outLog := log.New(os.Stdout, "", log.LstdFlags)
+	errLog := log.New(os.Stderr, "", log.LstdFlags)
 	exporter := &lifecycle.Exporter{
 		Buildpacks:   group.Buildpacks,
-		Out:          log.New(os.Stdout, "", log.LstdFlags),
-		Err:          log.New(os.Stderr, "", log.LstdFlags),
+		Out:          outLog,
+		Err:          errLog,
 		UID:          uid,
 		GID:          gid,
 		ArtifactsDir: artifactsDir,
@@ -85,22 +87,10 @@ func export() error {
 		return err
 	}
 
-	mirrorsPath := os.Getenv("CNB_MIRRORS_PATH")
-	if mirrorsPath == "" {
-		return errors.New("env var CNB_MIRRORS_PATH must be set")
-	}
-
-	mirrors := lifecycle.MirrorsType{}
-	_, err = toml.DecodeFile(mirrorsPath, &mirrors)
+	var stack lifecycle.StackMetadata
+	_, err = toml.DecodeFile(stackPath, &stack)
 	if err != nil {
-		return err
-	}
-
-	if runImageRef == "" {
-		runImageRef, err = selectRunImageMirror(repoName, mirrors)
-		if err != nil {
-			return err
-		}
+		outLog.Printf("no stack.toml found at path '%s', stack metadata will not be exported\n", stackPath)
 	}
 
 	var runImage, origImage image.Image
@@ -124,36 +114,9 @@ func export() error {
 		}
 	}
 
-	if err := exporter.Export(layersDir, appDir, runImage, origImage, launcherPath, mirrors); err != nil {
+	if err := exporter.Export(layersDir, appDir, runImage, origImage, launcherPath, stack); err != nil {
 		return cmd.FailErrCode(err, cmd.CodeFailedBuild)
 	}
 
 	return nil
-}
-
-func selectRunImageMirror(repoName string, mirrors lifecycle.MirrorsType) (string, error) {
-	desiredRegistry, err := registry(repoName)
-	if err != nil {
-		return "", err
-	}
-
-	fmt.Fprintln(os.Stderr, ">>>>>>>>>>>>>>>>>>>>>>>>>>", desiredRegistry)
-
-	runImageList := append([]string{mirrors.Image}, mirrors.Mirrors...)
-	fmt.Fprintln(os.Stderr, "=========================", runImageList)
-	for _, img := range runImageList {
-		if reg, err := registry(img); err == nil && reg == desiredRegistry {
-			return img, nil
-		}
-	}
-
-	return "", fmt.Errorf("failed to select run image mirror for: %s", repoName)
-}
-
-func registry(imageName string) (string, error) {
-	ref, err := name.ParseReference(imageName, name.WeakValidation)
-	if err != nil {
-		return "", err
-	}
-	return ref.Context().RegistryStr(), nil
 }
