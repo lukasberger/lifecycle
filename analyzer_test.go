@@ -194,7 +194,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 						if err := analyzer.Analyze(image); err != nil {
 							t.Fatalf("Error: %s\n", err)
 						}
-						if _, err := ioutil.ReadFile(filepath.Join(layerDir, "metdata.buildpack/launch-cache.toml")); !os.IsNotExist(err) {
+						if _, err := ioutil.ReadFile(filepath.Join(layerDir, "metdata.buildpack", "launch-cache.toml")); !os.IsNotExist(err) {
 							t.Fatalf("Found unexpected metadata for launch-cache layer")
 						}
 					})
@@ -448,6 +448,25 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 						if _, err := ioutil.ReadFile(filepath.Join(layerDir, "no.metadata.buildpack", "launchlayer.toml")); !os.IsNotExist(err) {
 							t.Fatalf("Found stale launchlayer.toml, it should be removed")
 						}
+					})
+				})
+
+				when("analyzer is running as root", func() {
+					it.Before(func() {
+						if os.Getuid() != 0 {
+							t.Skip()
+						}
+						h.AssertNil(t, os.Setenv("PACK_USER_ID", "1234"))
+						h.AssertNil(t, os.Setenv("PACK_GROUP_ID", "4321"))
+					})
+
+					//ensures
+					it.Focus("chowns new files to PACK_USER_ID:PACK_GROUP_ID", func() {
+						h.AssertNil(t, analyzer.Analyze(image))
+						h.AssertUidGid(t, layerDir, 1234, 4321)
+						h.AssertUidGid(t, filepath.Join(layerDir, "metdata.buildpack", "launch-cache.toml"), 1234, 4321)
+						h.AssertUidGid(t, filepath.Join(layerDir, "no.cache.buildpack"), 1234, 4321)
+						h.AssertUidGid(t, filepath.Join(layerDir, "no.cache.buildpack", "go.toml"), 1234, 4321)
 					})
 				})
 			})
