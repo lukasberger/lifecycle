@@ -33,43 +33,47 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 		stdout, stderr *bytes.Buffer
 		layerDir       string
 		appDir         string
+		tmpDir         string
 	)
 
 	it.Before(func() {
 		var err error
-		layerDir, err = ioutil.TempDir("", "lifecycle-layer-dir")
-		if err != nil {
-			t.Fatalf("Error: %s\n", err)
-		}
-		appDir = filepath.Join(layerDir, "some-app-dir")
 
+		tmpDir, err = ioutil.TempDir("", "analyzer-tests")
+		h.AssertNil(t, err)
+
+		layerDir, err = ioutil.TempDir("", "lifecycle-layer-dir")
+		h.AssertNil(t, err)
+
+		appDir = filepath.Join(layerDir, "some-app-dir")
 		stdout, stderr = &bytes.Buffer{}, &bytes.Buffer{}
 		analyzer = &lifecycle.Analyzer{
-			Buildpacks: []*lifecycle.Buildpack{{ID: "metdata.buildpack"}, {ID: "no.cache.buildpack"}, {ID: "no.metadata.buildpack"}},
-			AppDir:     appDir,
-			LayersDir:  layerDir,
-			Out:        log.New(stdout, "", 0),
-			Err:        log.New(stderr, "", 0),
-			UID:        1234,
-			GID:        4321,
+			Buildpacks:   []*lifecycle.Buildpack{{ID: "metdata.buildpack"}, {ID: "no.cache.buildpack"}, {ID: "no.metadata.buildpack"}},
+			AppDir:       appDir,
+			LayersDir:    layerDir,
+			AnalyzedPath: filepath.Join(tmpDir, "some-previous-file.toml"),
+			Out:          log.New(stdout, "", 0),
+			Err:          log.New(stderr, "", 0),
+			UID:          1234,
+			GID:          4321,
 		}
 		mockCtrl = gomock.NewController(t)
 	})
 
 	it.After(func() {
+		os.RemoveAll(tmpDir)
 		os.RemoveAll(layerDir)
 		mockCtrl.Finish()
 	})
 
-	when("Analyze", func() {
+	when("#Analyze", func() {
 		var (
 			image *fakes.Image
 			ref   *testmock.MockReference
 		)
 
 		it.Before(func() {
-			image = fakes.NewImage("image-repo-name", "", "")
-
+			image = fakes.NewImage("image-repo-name", "", "s0m3D1g3sT")
 			ref = testmock.NewMockReference(mockCtrl)
 			ref.EXPECT().Name().AnyTimes()
 		})
@@ -81,7 +85,10 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 		when("image exists", func() {
 			when("image label has compatible metadata", func() {
 				it.Before(func() {
-					image.SetLabel("io.buildpacks.lifecycle.metadata", `{
+					h.AssertNil(t,
+						image.SetLabel(
+							"io.buildpacks.lifecycle.metadata",
+							`{
   "buildpacks": [
     {
       "key": "metdata.buildpack",
@@ -139,7 +146,8 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
       }
     }
   ]
-}`)
+}`,
+						))
 				})
 
 				it("should use labels to populate the layer dir", func() {
@@ -459,7 +467,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 				when("analyzer is running as root", func() {
 					it.Before(func() {
 						if os.Getuid() != 0 {
-							t.Skip()
+							t.Skip("Skipped when not running as root")
 						}
 					})
 
@@ -471,10 +479,25 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 						h.AssertUidGid(t, filepath.Join(layerDir, "no.cache.buildpack", "go.toml"), 1234, 4321)
 					})
 				})
+
+				when("analyzed path is provided", func() {
+					it("should write analyzed TOML at provided path", func() {
+						err := analyzer.Analyze(image)
+						h.AssertNil(t, err)
+
+						b, err := ioutil.ReadFile(analyzer.AnalyzedPath)
+						h.AssertNil(t, err)
+
+						entries := strings.Split(string(b), "\n")
+						h.AssertContains(t, entries, `repository = "image-repo-name"`)
+						h.AssertContains(t, entries, `digest = "s0m3D1g3sT"`)
+						h.AssertContains(t, entries, `[metadata]`)
+					})
+				})
 			})
 		})
 
-		when("the image cannot found", func() {
+		when("the image cannot be found", func() {
 			it.Before(func() {
 				h.AssertNil(t, image.Delete())
 			})
@@ -493,6 +516,21 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 				if _, err := ioutil.ReadDir(filepath.Join(layerDir, "some-app-dir")); err != nil {
 					t.Fatalf("Missing some-app-dir")
 				}
+			})
+
+			it("should write an analyzed.toml without a digest", func() {
+				h.AssertNil(t, image.Delete())
+
+				err := analyzer.Analyze(image)
+				h.AssertNil(t, err)
+
+				b, err := ioutil.ReadFile(analyzer.AnalyzedPath)
+				h.AssertNil(t, err)
+
+				entries := strings.Split(string(b), "\n")
+				h.AssertContains(t, entries, `repository = "image-repo-name"`)
+				h.AssertContains(t, entries, `digest = ""`)
+				h.AssertContains(t, entries, `[metadata]`)
 			})
 		})
 

@@ -2,7 +2,7 @@
 github.com/BurntSushi/toml
 # github.com/Microsoft/go-winio v0.4.12
 github.com/Microsoft/go-winio
-# github.com/buildpack/imgutil v0.0.0-20190509214933-76de939dfb34
+# github.com/buildpack/imgutil v0.0.0-20190613212649-bc74f5cf6410
 github.com/buildpack/imgutil
 github.com/buildpack/imgutil/fakes
 # github.com/docker/distribution v2.7.1+incompatible
@@ -36,7 +36,6 @@ github.com/docker/go-units
 # github.com/gogo/protobuf v1.2.1
 github.com/gogo/protobuf/proto
 # github.com/golang/mock v1.3.0
-github.com/golang/mock/mockgen/model
 github.com/golang/mock/gomock
 # github.com/google/go-cmp v0.3.0
 github.com/google/go-cmp/cmp

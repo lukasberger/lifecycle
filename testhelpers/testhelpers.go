@@ -54,6 +54,13 @@ func AssertContains(t *testing.T, slice []string, expected string) {
 
 }
 
+func AssertStringContains(t *testing.T, str string, expected string) {
+	t.Helper()
+	if !strings.Contains(str, expected) {
+		t.Fatalf("Expected %s to contain: %s\nDiff:\n%s", str, expected, cmp.Diff(str, expected))
+	}
+}
+
 func AssertError(t *testing.T, actual error, expected string) {
 	t.Helper()
 	if actual == nil {

@@ -1,8 +1,8 @@
 # Go parameters
 GOCMD=go
 GOENV=GO111MODULE=on GOOS=linux GOARCH=amd64 CGO_ENABLED=0
-GOBUILD=$(GOCMD) build -mod=vendor
-GOTEST=$(GOCMD) test -mod=vendor
+GOBUILD=$(GOCMD) build
+GOTEST=$(GOCMD) test
 LIFECYCLE_VERSION?=dev
 ARCHIVE_NAME=lifecycle-$(LIFECYCLE_VERSION)+linux.x86-64
 

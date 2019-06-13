@@ -19,24 +19,26 @@ import (
 )
 
 var (
-	repoName   string
-	layersDir  string
-	appDir     string
-	groupPath  string
-	useDaemon  bool
-	useHelpers bool
-	uid        int
-	gid        int
+	repoName     string
+	appDir       string
+	layersDir    string
+	analyzedPath string
+	groupPath    string
+	useDaemon    bool
+	useHelpers   bool
+	uid          int
+	gid          int
 )
 
 func init() {
-	cmd.FlagLayersDir(&layersDir)
 	cmd.FlagAppDir(&appDir)
+	cmd.FlagGID(&gid)
 	cmd.FlagGroupPath(&groupPath)
+	cmd.FlagLayersDir(&layersDir)
+	cmd.FlagAnalyzedPath(&analyzedPath)
+	cmd.FlagUID(&uid)
 	cmd.FlagUseDaemon(&useDaemon)
 	cmd.FlagUseCredHelpers(&useHelpers)
-	cmd.FlagUID(&uid)
-	cmd.FlagGID(&gid)
 }
 
 func main() {
@@ -67,13 +69,14 @@ func analyzer() error {
 	}
 
 	analyzer := &lifecycle.Analyzer{
-		Buildpacks: group.Buildpacks,
-		AppDir:     appDir,
-		LayersDir:  layersDir,
-		Out:        log.New(os.Stdout, "", 0),
-		Err:        log.New(os.Stderr, "", 0),
-		UID:        uid,
-		GID:        gid,
+		Buildpacks:   group.Buildpacks,
+		AppDir:       appDir,
+		LayersDir:    layersDir,
+		AnalyzedPath: analyzedPath,
+		Out:          log.New(os.Stdout, "", 0),
+		Err:          log.New(os.Stderr, "", 0),
+		UID:          uid,
+		GID:          gid,
 	}
 
 	var err error
@@ -84,14 +87,22 @@ func analyzer() error {
 		if err != nil {
 			return cmd.FailErr(err, "create docker client")
 		}
-		previousImage, err = imgutil.NewLocalImage(repoName, dockerClient)
+		previousImage, err = imgutil.NewLocalImage(
+			repoName,
+			dockerClient,
+			imgutil.FromLocalImageBase(repoName),
+		)
 		if err != nil {
 			return cmd.FailErr(err, "access previous image")
 		}
 	} else {
-		previousImage, err = imgutil.NewRemoteImage(repoName, auth.DefaultEnvKeychain())
+		previousImage, err = imgutil.NewRemoteImage(
+			repoName,
+			auth.DefaultEnvKeychain(),
+			imgutil.FromRemoteImageBase(repoName),
+		)
 		if err != nil {
-			return err
+			return cmd.FailErr(err, "access previous image")
 		}
 	}
 

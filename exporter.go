@@ -3,15 +3,13 @@ package lifecycle
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"path/filepath"
-
 	"github.com/buildpack/imgutil"
-	"github.com/pkg/errors"
-
 	"github.com/buildpack/lifecycle/archive"
 	"github.com/buildpack/lifecycle/cmd"
 	"github.com/buildpack/lifecycle/metadata"
+	"github.com/pkg/errors"
+	"log"
+	"path/filepath"
 )
 
 type Exporter struct {
@@ -22,30 +20,32 @@ type Exporter struct {
 	UID, GID     int
 }
 
-func (e *Exporter) Export(layersDir, appDir string, runImage, origImage imgutil.Image, launcher string, stack metadata.StackMetadata) error {
+var FailedToSaveError = errors.New("one or more image names failed to save")
+
+func (e *Exporter) Export(
+	layersDir,
+	appDir string,
+	appImage imgutil.Image,
+	origMetadata metadata.AppImageMetadata,
+	additionalNames []string,
+	launcher string,
+	stack metadata.StackMetadata,
+) error {
 	var err error
 
 	meta := metadata.AppImageMetadata{}
 
-	meta.RunImage.TopLayer, err = runImage.TopLayer()
+	meta.RunImage.TopLayer, err = appImage.TopLayer()
 	if err != nil {
 		return errors.Wrap(err, "get run image top layer SHA")
 	}
 
-	meta.RunImage.SHA, err = runImage.Digest()
+	meta.RunImage.SHA, err = appImage.Digest()
 	if err != nil {
 		return errors.Wrap(err, "get run image digest")
 	}
 
 	meta.Stack = stack
-
-	origMetadata, err := metadata.GetAppMetadata(origImage)
-	if err != nil {
-		return errors.Wrap(err, "metadata for previous image")
-	}
-
-	runImage.Rename(origImage.Name())
-	appImage := runImage
 
 	meta.App.SHA, err = e.addOrReuseLayer(appImage, &layer{path: appDir, identifier: "app"}, origMetadata.App.SHA)
 	if err != nil {
@@ -134,11 +134,27 @@ func (e *Exporter) Export(layersDir, appDir string, runImage, origImage imgutil.
 		return errors.Wrap(err, "setting cmd")
 	}
 
-	sha, err := appImage.Save()
-	if err != nil {
-		return errors.Wrap(err, "saving")
+	result := appImage.Save(additionalNames...)
+
+	if result.Digest != "" {
+		e.Out.Printf("\n*** Digest: %s\n", result.Digest)
 	}
-	e.Out.Printf("\n*** Image: %s@%s\n", runImage.Name(), sha)
+
+	hasError := false
+	e.Out.Println("*** Images:")
+	for _, n := range append([]string{appImage.Name()}, additionalNames...) {
+		err := result.Outcomes[n]
+		if err == nil {
+			e.Out.Printf("      %s - succeeded\n", n)
+		} else {
+			hasError = true
+			e.Out.Printf("      %s - %s\n", n, err.Error())
+		}
+	}
+
+	if hasError {
+		return FailedToSaveError
+	}
 
 	return nil
 }

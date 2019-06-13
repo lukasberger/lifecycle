@@ -80,15 +80,20 @@ func (c *cachingImage) GetLayer(sha string) (io.ReadCloser, error) {
 	}
 }
 
-func (c *cachingImage) Save() (string, error) {
-	sha, err := c.image.Save()
-	if err != nil {
-		return "", err
+func (c *cachingImage) Save(additionalNames ...string) imgutil.SaveResult {
+	result := c.image.Save(additionalNames...)
+	err := result.Outcomes[c.Name()]
+
+	if err == nil {
+		if err := c.cache.Commit(); err != nil {
+			return imgutil.NewFailedResult(
+				append([]string{c.Name()}, additionalNames...),
+				errors.Wrap(err, "failed to commit cache"),
+			)
+		}
 	}
-	if err := c.cache.Commit(); err != nil {
-		return "", err
-	}
-	return sha, nil
+
+	return result
 }
 
 // delegates to image
