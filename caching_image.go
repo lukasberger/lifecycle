@@ -19,6 +19,10 @@ type cachingImage struct {
 	cache *cache.VolumeCache
 }
 
+func (c *cachingImage) AddLayerFromFile(path string) error {
+	panic("implement me")
+}
+
 func NewCachingImage(image imgutil.Image, cache *cache.VolumeCache) imgutil.Image {
 	return &cachingImage{
 		image: image,
@@ -26,7 +30,7 @@ func NewCachingImage(image imgutil.Image, cache *cache.VolumeCache) imgutil.Imag
 	}
 }
 
-func (c *cachingImage) AddLayer(path string) error {
+func (c *cachingImage) AddLayerFromFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return errors.Wrap(err, "opening layer file")
@@ -43,7 +47,15 @@ func (c *cachingImage) AddLayer(path string) error {
 		return err
 	}
 
-	return c.image.AddLayer(path)
+	return c.image.AddLayerFromFile(path)
+}
+
+func (c *cachingImage) AddLayerFromReader(r io.Reader) error {
+	if err := c.cache.AddLayer(r); err != nil {
+		return err
+	}
+
+	return c.image.AddLayerFromReader(r)
 }
 
 func (c *cachingImage) ReuseLayer(sha string) error {
@@ -57,7 +69,7 @@ func (c *cachingImage) ReuseLayer(sha string) error {
 		if err != nil {
 			return err
 		}
-		return c.image.AddLayer(path)
+		return c.image.AddLayerFromFile(path)
 	} else {
 		if err := c.image.ReuseLayer(sha); err != nil {
 			return err

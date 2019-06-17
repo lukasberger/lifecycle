@@ -55,7 +55,7 @@ func (c *ImageCache) AddLayerFile(sha string, tarPath string) error {
 	if c.committed {
 		return errCacheCommitted
 	}
-	return c.newImage.AddLayer(tarPath)
+	return c.newImage.AddLayerFromFile(tarPath)
 }
 
 func (c *ImageCache) ReuseLayer(sha string) error {

@@ -154,5 +154,5 @@ func (e *Exporter) addOrReuseLayer(image imgutil.Image, layer identifiableLayer,
 		return sha, image.ReuseLayer(previousSha)
 	}
 	e.Out.Printf("Exporting layer '%s' with SHA %s\n", layer.Identifier(), sha)
-	return sha, image.AddLayer(tarPath)
+	return sha, image.AddLayerFromFile(tarPath)
 }

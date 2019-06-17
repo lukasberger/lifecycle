@@ -97,7 +97,7 @@ func (c *VolumeCache) AddLayerFile(sha string, tarPath string) error {
 	return nil
 }
 
-func (c *VolumeCache) AddLayer(rc io.ReadCloser) error {
+func (c *VolumeCache) AddLayer(rc io.Reader) error {
 	if c.committed {
 		return errCacheCommitted
 	}

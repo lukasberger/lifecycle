@@ -117,7 +117,7 @@ func testImageCache(t *testing.T, when spec.G, it spec.S) {
 	when("#RetrieveLayer", func() {
 		when("layer exists", func() {
 			it.Before(func() {
-				h.AssertNil(t, fakeOriginalImage.AddLayer(testLayerTarPath))
+				h.AssertNil(t, fakeOriginalImage.AddLayerFromFile(testLayerTarPath))
 			})
 
 			it("returns the layer's reader", func() {
@@ -231,7 +231,7 @@ func testImageCache(t *testing.T, when spec.G, it spec.S) {
 		when("with #ReuseLayer", func() {
 			it.Before(func() {
 				fakeNewImage.AddPreviousLayer(testLayerSHA, testLayerTarPath)
-				fakeOriginalImage.AddLayer(testLayerTarPath)
+				fakeOriginalImage.AddLayerFromFile(testLayerTarPath)
 			})
 
 			when("reuse then commit", func() {

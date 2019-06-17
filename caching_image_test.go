@@ -52,7 +52,7 @@ func testCachingImage(t *testing.T, when spec.G, it spec.S) {
 
 	when("#AddLayerFile", func() {
 		it("adds the layer to the cache and the image", func() {
-			h.AssertNil(t, subject.AddLayer(layerPath))
+			h.AssertNil(t, subject.AddLayerFromFile(layerPath))
 
 			_, err := subject.Save()
 			h.AssertNil(t, err)
@@ -149,7 +149,7 @@ func testCachingImage(t *testing.T, when spec.G, it spec.S) {
 
 		when("the layer does not exist in the cache", func() {
 			it.Before(func() {
-				h.AssertNil(t, fakeImage.AddLayer(layerPath))
+				h.AssertNil(t, fakeImage.AddLayerFromFile(layerPath))
 				_, err := fakeImage.Save()
 				h.AssertNil(t, err)
 			})
