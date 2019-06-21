@@ -54,10 +54,10 @@ func testCachingImage(t *testing.T, when spec.G, it spec.S) {
 		it("adds the layer to the cache and the image", func() {
 			h.AssertNil(t, subject.AddLayer(layerPath))
 
-			_, err := subject.Save()
-			h.AssertNil(t, err)
+			result := subject.Save()
+			h.AssertNil(t, result.Outcomes[subject.Name()])
 
-			_, err = fakeImage.GetLayer(layerSHA)
+			_, err := fakeImage.GetLayer(layerSHA)
 			h.AssertNil(t, err)
 
 			_, err = volumeCache.RetrieveLayer(layerSHA)
@@ -81,20 +81,20 @@ func testCachingImage(t *testing.T, when spec.G, it spec.S) {
 			it("adds the layer from the cache to the image", func() {
 				h.AssertNil(t, subject.ReuseLayer(layerSHA))
 
-				_, err := subject.Save()
-				h.AssertNil(t, err)
+				result := subject.Save()
+				h.AssertNil(t, result.Outcomes[subject.Name()])
 
-				_, err = fakeImage.GetLayer(layerSHA)
+				_, err := fakeImage.GetLayer(layerSHA)
 				h.AssertNil(t, err)
 			})
 
 			it("keeps the layer in the cache", func() {
 				h.AssertNil(t, subject.ReuseLayer(layerSHA))
 
-				_, err := subject.Save()
-				h.AssertNil(t, err)
+				result := subject.Save()
+				h.AssertNil(t, result.Outcomes[subject.Name()])
 
-				_, err = volumeCache.RetrieveLayerFile(layerSHA)
+				_, err := volumeCache.RetrieveLayerFile(layerSHA)
 				h.AssertNil(t, err)
 			})
 		})
@@ -107,8 +107,8 @@ func testCachingImage(t *testing.T, when spec.G, it spec.S) {
 			it("reuses the layer from the image", func() {
 				h.AssertNil(t, subject.ReuseLayer(layerSHA))
 
-				_, err := subject.Save()
-				h.AssertNil(t, err)
+				result := subject.Save()
+				h.AssertNil(t, result.Outcomes[subject.Name()])
 
 				for _, reusedSHA := range fakeImage.ReusedLayers() {
 					if reusedSHA == layerSHA {
@@ -121,10 +121,10 @@ func testCachingImage(t *testing.T, when spec.G, it spec.S) {
 			it("adds the layer to the cache", func() {
 				h.AssertNil(t, subject.ReuseLayer(layerSHA))
 
-				_, err := subject.Save()
-				h.AssertNil(t, err)
+				result := subject.Save()
+				h.AssertNil(t, result.Outcomes[subject.Name()])
 
-				_, err = volumeCache.RetrieveLayer(layerSHA)
+				_, err := volumeCache.RetrieveLayer(layerSHA)
 				h.AssertNil(t, err)
 			})
 		})
@@ -150,8 +150,9 @@ func testCachingImage(t *testing.T, when spec.G, it spec.S) {
 		when("the layer does not exist in the cache", func() {
 			it.Before(func() {
 				h.AssertNil(t, fakeImage.AddLayer(layerPath))
-				_, err := fakeImage.Save()
-				h.AssertNil(t, err)
+
+				result := subject.Save()
+				h.AssertNil(t, result.Outcomes[subject.Name()])
 			})
 
 			it("gets it from the image", func() {

@@ -75,7 +75,8 @@ func (c *ImageCache) Commit() error {
 	}
 	c.committed = true
 
-	_, err := c.newImage.Save()
+	result := c.newImage.Save()
+	err := result.Outcomes[c.newImage.Name()]
 	if err != nil {
 		return errors.Wrapf(err, "saving image '%s'", c.newImage.Name())
 	}

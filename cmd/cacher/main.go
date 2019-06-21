@@ -76,14 +76,15 @@ func doCache() error {
 			return cmd.FailErr(err, "create docker client")
 		}
 
-		origCacheImage, err := imgutil.NewLocalImage(cacheImageTag, dockerClient)
+		origCacheImage, err := imgutil.NewLocalImage(cacheImageTag, dockerClient, imgutil.FromLocalImageBase(cacheImageTag))
 		if err != nil {
 			return cmd.FailErr(err, "access cache image")
 		}
 
+		emptyImage, err := imgutil.NewLocalImage(cacheImageTag, dockerClient, imgutil.WithPreviousLocalImage(cacheImageTag))
 		cacheStore = cache.NewImageCache(
 			origCacheImage,
-			imgutil.EmptyLocalImage(origCacheImage.Name(), dockerClient),
+			emptyImage,
 		)
 	} else {
 		var err error

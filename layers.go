@@ -174,7 +174,7 @@ func (bp *bpLayer) hasLocalContents() bool {
 }
 
 func (bp *bpLayer) writeSha(sha string) error {
-	if err := ioutil.WriteFile(filepath.Join(bp.path+".sha"), []byte(sha), 0777); err != nil {
+	if err := ioutil.WriteFile(bp.path+".sha", []byte(sha), 0777); err != nil {
 		return err
 	}
 	return nil

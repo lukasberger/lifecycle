@@ -11,13 +11,14 @@ import (
 )
 
 type Analyzer struct {
-	Buildpacks []*Buildpack
-	AppDir     string
-	LayersDir  string
-	In         []byte
-	Out, Err   *log.Logger
-	UID        int
-	GID        int
+	Buildpacks   []*Buildpack
+	AppDir       string
+	AnalyzedPath string
+	LayersDir    string
+	In           []byte
+	Out, Err     *log.Logger
+	UID          int
+	GID          int
 }
 
 func (a *Analyzer) Analyze(image imgutil.Image) error {
@@ -25,6 +26,7 @@ func (a *Analyzer) Analyze(image imgutil.Image) error {
 	if err != nil {
 		return err
 	}
+
 	for _, buildpack := range a.Buildpacks {
 		cache, err := readBuildpackLayersDir(a.LayersDir, *buildpack)
 		if err != nil {
@@ -73,12 +75,35 @@ func (a *Analyzer) Analyze(image imgutil.Image) error {
 	}
 
 	// if analyzer is running as root it needs to fix the ownership of the layers dir
-	if current := os.Getuid(); err != nil {
-		return err
-	} else if current == 0 {
+	if current := os.Getuid(); current == 0 {
 		if err := recursiveChown(a.LayersDir, a.UID, a.GID); err != nil {
 			return errors.Wrapf(err, "chowning layers dir to '%d/%d'", a.UID, a.GID)
 		}
 	}
+
+	return a.writeAnalyzedMetadata(image, data)
+}
+
+func (a *Analyzer) writeAnalyzedMetadata(image imgutil.Image, appMd metadata.AppImageMetadata) error {
+	var (
+		err    error
+		digest string
+	)
+	if image.Found() {
+		digest, err = image.Digest()
+		if err != nil {
+			return errors.Wrap(err, "retrieve image digest")
+		}
+	}
+
+	md := metadata.AnalyzedMetadata{
+		Repository: image.Name(),
+		Digest:     digest,
+		Metadata:   appMd,
+	}
+	if err := WriteTOML(a.AnalyzedPath, md); err != nil {
+		return errors.Wrap(err, "write analyzed.toml")
+	}
+
 	return nil
 }
