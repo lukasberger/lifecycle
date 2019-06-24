@@ -9,6 +9,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/buildpack/imgutil"
+	"github.com/buildpack/imgutil/local"
+	"github.com/buildpack/imgutil/remote"
 	"github.com/pkg/errors"
 
 	"github.com/buildpack/lifecycle"
@@ -139,11 +141,11 @@ func export() error {
 			return err
 		}
 
-		appImage, err = imgutil.NewLocalImage(
+		appImage, err = local.NewImage(
 			repoNames[0],
 			dockerClient,
-			imgutil.FromLocalImageBase(runImageRef),
-			imgutil.WithPreviousLocalImage(analyzedMD.FullName()),
+			local.FromBaseImage(runImageRef),
+			local.WithPreviousImage(analyzedMD.FullName()),
 		)
 		if err != nil {
 			return cmd.FailErr(err, "access run image")
@@ -157,11 +159,11 @@ func export() error {
 			appImage = lifecycle.NewCachingImage(appImage, volumeCache)
 		}
 	} else {
-		appImage, err = imgutil.NewRemoteImage(
+		appImage, err = remote.NewImage(
 			repoNames[0],
 			auth.DefaultEnvKeychain(),
-			imgutil.FromRemoteImageBase(runImageRef),
-			imgutil.WithPreviousRemoteImage(analyzedMD.FullName()),
+			remote.FromBaseImage(runImageRef),
+			remote.WithPreviousImage(analyzedMD.FullName()),
 		)
 		if err != nil {
 			return cmd.FailErr(err, "access run image")

@@ -57,7 +57,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 		h.AssertNil(t, os.Mkdir(layersDir, 0777))
 		h.AssertNil(t, ioutil.WriteFile(filepath.Join(tmpDir, "launcher"), []byte("some-launcher"), 0777))
 
-		fakeAppImage = fakes.NewImage("runImageName", "some-top-layer-sha", "some-run-image-digest")
+		fakeAppImage = fakes.NewImage("some-repo/app-image", "some-top-layer-sha", "some-image-digest")
 
 		additionalNames = []string{"some-repo/app-image:foo", "some-repo/app-image:bar"}
 
@@ -100,7 +100,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				localReusableLayerSha := h.ComputeSHA256ForPath(t, localReusableLayerPath, uid, gid)
 				launcherSHA := h.ComputeSHA256ForPath(t, launcherPath, uid, gid)
 
-				fakeOriginalImage = fakes.NewImage("app/original-Image-Name", "original-top-layer-sha", "some-original-run-image-digest")
+				fakeOriginalImage = fakes.NewImage("app/original-image", "original-top-layer-sha", "some-original-run-image-digest")
 				fakeAppImage.AddPreviousLayer("sha256:"+localReusableLayerSha, "")
 				fakeAppImage.AddPreviousLayer("sha256:"+launcherSHA, "")
 				fakeAppImage.AddPreviousLayer("sha256:orig-launch-layer-no-local-dir-sha", "")
@@ -263,7 +263,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 
 				t.Log("adds run image metadata to label")
 				h.AssertEq(t, meta.RunImage.TopLayer, "some-top-layer-sha")
-				h.AssertEq(t, meta.RunImage.SHA, "some-run-image-digest")
+				h.AssertEq(t, meta.RunImage.SHA, "some-image-digest")
 
 				t.Log("adds layer shas to metadata label")
 				h.AssertEq(t, meta.App.SHA, "sha256:"+appLayerSHA)
@@ -457,7 +457,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				h.AssertNil(t, err)
 
 				// TODO : this is an hacky way to create a non-existing image and should be improved in imgutil
-				nonExistingOriginalImage = fakes.NewImage("app/original-Image-Name", "", "")
+				nonExistingOriginalImage = fakes.NewImage("app/original-image", "", "")
 				nonExistingOriginalImage.Delete()
 			})
 
@@ -562,7 +562,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 
 				t.Log("adds run image metadata to label")
 				h.AssertEq(t, meta.RunImage.TopLayer, "some-top-layer-sha")
-				h.AssertEq(t, meta.RunImage.SHA, "some-run-image-digest")
+				h.AssertEq(t, meta.RunImage.SHA, "some-image-digest")
 
 				t.Log("adds layer shas to metadata label")
 				h.AssertEq(t, meta.App.SHA, "sha256:"+appLayerSHA)
@@ -689,7 +689,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				h.AssertNil(t, err)
 
 				// TODO : this is an hacky way to create a non-existing image and should be improved in imgutil
-				nonExistingOriginalImage = fakes.NewImage("app/original-Image-Name", "", "")
+				nonExistingOriginalImage = fakes.NewImage("app/original-image", "", "")
 				nonExistingOriginalImage.Delete()
 			})
 
@@ -718,7 +718,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				appDir, err = filepath.Abs(filepath.Join("testdata", "exporter", "cache-layer-no-contents", "layers", "app"))
 				h.AssertNil(t, err)
 
-				fakeOriginalImage = fakes.NewImage("app/original-Image-Name", "original-top-layer-sha", "some-original-run-image-digest")
+				fakeOriginalImage = fakes.NewImage("app/original-image", "original-top-layer-sha", "some-original-run-image-digest")
 				_ = fakeOriginalImage.SetLabel("io.buildpacks.lifecycle.metadata", `{
   "buildpacks": [
     {

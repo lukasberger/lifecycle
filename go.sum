@@ -9,6 +9,8 @@ github.com/buildpack/imgutil v0.0.0-20190613212649-bc74f5cf6410 h1:N8WxkgrR/B6SW
 github.com/buildpack/imgutil v0.0.0-20190613212649-bc74f5cf6410/go.mod h1:hucbKwghPRl30WTj6YxhsoOYTLzpLo3hDSSMPmCAYf4=
 github.com/buildpack/imgutil v0.0.0-20190621192818-ac98480e2190 h1:mxThMLkNXOGhYNOwnuTpLa0Owoauyc0OYmdaY481jFg=
 github.com/buildpack/imgutil v0.0.0-20190621192818-ac98480e2190/go.mod h1:E3o86fleh0EQVzrk+u4drkBygnYf0ENgOQ0QAuVpZHE=
+github.com/buildpack/imgutil v0.0.0-20190624192032-27a408e358ce h1:o3/h9NEwblg6hWdsi3S1MbH7P5SYfrAI37ofbtGjf6U=
+github.com/buildpack/imgutil v0.0.0-20190624192032-27a408e358ce/go.mod h1:E3o86fleh0EQVzrk+u4drkBygnYf0ENgOQ0QAuVpZHE=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

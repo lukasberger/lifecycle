@@ -2,8 +2,10 @@
 github.com/BurntSushi/toml
 # github.com/Microsoft/go-winio v0.4.12
 github.com/Microsoft/go-winio
-# github.com/buildpack/imgutil v0.0.0-20190621192818-ac98480e2190
+# github.com/buildpack/imgutil v0.0.0-20190624192032-27a408e358ce
 github.com/buildpack/imgutil
+github.com/buildpack/imgutil/local
+github.com/buildpack/imgutil/remote
 github.com/buildpack/imgutil/fakes
 # github.com/docker/distribution v2.7.1+incompatible
 github.com/docker/distribution/reference

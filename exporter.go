@@ -27,7 +27,7 @@ var FailedToSaveError = errors.New("one or more image names failed to save")
 func (e *Exporter) Export(
 	layersDir,
 	appDir string,
-	appImage imgutil.Image,
+	workingImage imgutil.Image,
 	origMetadata metadata.AppImageMetadata,
 	additionalNames []string,
 	launcher string,
@@ -37,29 +37,29 @@ func (e *Exporter) Export(
 
 	meta := metadata.AppImageMetadata{}
 
-	meta.RunImage.TopLayer, err = appImage.TopLayer()
+	meta.RunImage.TopLayer, err = workingImage.TopLayer()
 	if err != nil {
 		return errors.Wrap(err, "get run image top layer SHA")
 	}
 
-	meta.RunImage.SHA, err = appImage.Digest()
+	meta.RunImage.SHA, err = workingImage.Digest()
 	if err != nil {
 		return errors.Wrap(err, "get run image digest")
 	}
 
 	meta.Stack = stack
 
-	meta.App.SHA, err = e.addOrReuseLayer(appImage, &layer{path: appDir, identifier: "app"}, origMetadata.App.SHA)
+	meta.App.SHA, err = e.addOrReuseLayer(workingImage, &layer{path: appDir, identifier: "app"}, origMetadata.App.SHA)
 	if err != nil {
 		return errors.Wrap(err, "exporting app layer")
 	}
 
-	meta.Config.SHA, err = e.addOrReuseLayer(appImage, &layer{path: filepath.Join(layersDir, "config"), identifier: "config"}, origMetadata.Config.SHA)
+	meta.Config.SHA, err = e.addOrReuseLayer(workingImage, &layer{path: filepath.Join(layersDir, "config"), identifier: "config"}, origMetadata.Config.SHA)
 	if err != nil {
 		return errors.Wrap(err, "exporting config layer")
 	}
 
-	meta.Launcher.SHA, err = e.addOrReuseLayer(appImage, &layer{path: launcher, identifier: "launcher"}, origMetadata.Launcher.SHA)
+	meta.Launcher.SHA, err = e.addOrReuseLayer(workingImage, &layer{path: launcher, identifier: "launcher"}, origMetadata.Launcher.SHA)
 	if err != nil {
 		return errors.Wrap(err, "exporting launcher layer")
 	}
@@ -79,7 +79,7 @@ func (e *Exporter) Export(
 
 			if layer.hasLocalContents() {
 				origLayerMetadata := origMetadata.MetadataForBuildpack(bp.ID).Layers[layer.name()]
-				lmd.SHA, err = e.addOrReuseLayer(appImage, &layer, origLayerMetadata.SHA)
+				lmd.SHA, err = e.addOrReuseLayer(workingImage, &layer, origLayerMetadata.SHA)
 				if err != nil {
 					return err
 				}
@@ -93,7 +93,7 @@ func (e *Exporter) Export(
 				}
 
 				e.Out.Printf("Reusing layer '%s' with SHA %s\n", layer.Identifier(), origLayerMetadata.SHA)
-				if err := appImage.ReuseLayer(origLayerMetadata.SHA); err != nil {
+				if err := workingImage.ReuseLayer(origLayerMetadata.SHA); err != nil {
 					return errors.Wrapf(err, "reusing layer: '%s'", layer.Identifier())
 				}
 				lmd.SHA = origLayerMetadata.SHA
@@ -116,27 +116,27 @@ func (e *Exporter) Export(
 	if err != nil {
 		return errors.Wrap(err, "marshall metadata")
 	}
-	if err := appImage.SetLabel(metadata.AppMetadataLabel, string(data)); err != nil {
+	if err := workingImage.SetLabel(metadata.AppMetadataLabel, string(data)); err != nil {
 		return errors.Wrap(err, "set app image metadata label")
 	}
 
-	if err := appImage.SetEnv(cmd.EnvLayersDir, layersDir); err != nil {
+	if err := workingImage.SetEnv(cmd.EnvLayersDir, layersDir); err != nil {
 		return errors.Wrapf(err, "set app image env %s", cmd.EnvLayersDir)
 	}
 
-	if err := appImage.SetEnv(cmd.EnvAppDir, appDir); err != nil {
+	if err := workingImage.SetEnv(cmd.EnvAppDir, appDir); err != nil {
 		return errors.Wrapf(err, "set app image env %s", cmd.EnvAppDir)
 	}
 
-	if err := appImage.SetEntrypoint(launcher); err != nil {
+	if err := workingImage.SetEntrypoint(launcher); err != nil {
 		return errors.Wrap(err, "setting entrypoint")
 	}
 
-	if err := appImage.SetCmd(); err != nil { // Note: Command intentionally empty
+	if err := workingImage.SetCmd(); err != nil { // Note: Command intentionally empty
 		return errors.Wrap(err, "setting cmd")
 	}
 
-	result := appImage.Save(additionalNames...)
+	result := workingImage.Save(additionalNames...)
 
 	if result.Digest != "" {
 		e.Out.Printf("\n*** Digest: %s\n", result.Digest)
@@ -144,7 +144,7 @@ func (e *Exporter) Export(
 
 	hasError := false
 	e.Out.Println("*** Images:")
-	for _, n := range append([]string{appImage.Name()}, additionalNames...) {
+	for _, n := range append([]string{workingImage.Name()}, additionalNames...) {
 		err := result.Outcomes[n]
 		if err == nil {
 			e.Out.Printf("      %s - succeeded\n", n)

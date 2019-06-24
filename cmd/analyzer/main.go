@@ -11,6 +11,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/buildpack/imgutil"
+	"github.com/buildpack/imgutil/local"
+	"github.com/buildpack/imgutil/remote"
 
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/lifecycle/cmd"
@@ -87,19 +89,19 @@ func analyzer() error {
 		if err != nil {
 			return cmd.FailErr(err, "create docker client")
 		}
-		previousImage, err = imgutil.NewLocalImage(
+		previousImage, err = local.NewImage(
 			repoName,
 			dockerClient,
-			imgutil.FromLocalImageBase(repoName),
+			local.FromBaseImage(repoName),
 		)
 		if err != nil {
 			return cmd.FailErr(err, "access previous image")
 		}
 	} else {
-		previousImage, err = imgutil.NewRemoteImage(
+		previousImage, err = remote.NewImage(
 			repoName,
 			auth.DefaultEnvKeychain(),
-			imgutil.FromRemoteImageBase(repoName),
+			remote.FromBaseImage(repoName),
 		)
 		if err != nil {
 			return cmd.FailErr(err, "access previous image")

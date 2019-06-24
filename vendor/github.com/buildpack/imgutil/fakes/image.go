@@ -5,15 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
-
-	"github.com/pkg/errors"
 
 	"github.com/buildpack/imgutil"
 )
@@ -180,10 +179,9 @@ func (f *Image) Save(additionalNames ...string) imgutil.SaveResult {
 
 	errs := map[string]error{}
 	for _, n := range allNames {
-		if !isASCII(n) {
-			errs[n] = errors.New("could not parse reference")
-		} else {
-			errs[n] = nil
+		_, err := name.ParseReference(n, name.WeakValidation)
+		errs[n] = err
+		if err == nil {
 			f.savedNames[n] = true
 		}
 	}
@@ -192,15 +190,6 @@ func (f *Image) Save(additionalNames ...string) imgutil.SaveResult {
 		Outcomes: errs,
 		Digest:   "saved-digest-from-fake-run-image",
 	}
-}
-
-func isASCII(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] > unicode.MaxASCII {
-			return false
-		}
-	}
-	return true
 }
 
 func (f *Image) copyLayer(path, newPath string) error {

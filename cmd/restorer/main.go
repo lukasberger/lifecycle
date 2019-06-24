@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	"github.com/buildpack/imgutil"
+	"github.com/buildpack/imgutil/local"
 
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/lifecycle/cache"
@@ -70,12 +70,12 @@ func restore() error {
 			return cmd.FailErr(err, "create docker client")
 		}
 
-		origCacheImage, err := imgutil.NewLocalImage(cacheImageTag, dockerClient, imgutil.FromLocalImageBase(cacheImageTag))
+		origCacheImage, err := local.NewImage(cacheImageTag, dockerClient, local.FromBaseImage(cacheImageTag))
 		if err != nil {
 			return cmd.FailErr(err, "access cache image")
 		}
 
-		emptyImage, err := imgutil.NewLocalImage(cacheImageTag, dockerClient, imgutil.WithPreviousLocalImage(cacheImageTag))
+		emptyImage, err := local.NewImage(cacheImageTag, dockerClient, local.WithPreviousImage(cacheImageTag))
 		cacheStore = cache.NewImageCache(
 			origCacheImage,
 			emptyImage,
