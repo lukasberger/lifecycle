@@ -353,7 +353,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				h.AssertStringContains(t,
 					stdout.String(),
 					fmt.Sprintf(
-						`*** Digest: saved-digest-from-fake-run-image
+						`*** Digest: some-image-digest-saved
 *** Images:
       %s - succeeded
       %s - succeeded
@@ -380,12 +380,12 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 						stack,
 					)
 
-					h.AssertError(t, err, lifecycle.FailedToSaveError.Error())
+					h.AssertError(t, err, fmt.Sprintf("failed to write image to the following tags: [%s]", failingName))
 
 					h.AssertStringContains(t,
 						stdout.String(),
 						fmt.Sprintf(
-							`*** Digest: saved-digest-from-fake-run-image
+							`*** Digest: some-image-digest-saved
 *** Images:
       %s - succeeded
       %s - succeeded
@@ -441,7 +441,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 
 			it("saves the image for all provided additionalNames", func() {
 				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeAppImage, fakeImageMetadata, additionalNames, launcherPath, stack))
-				h.AssertEq(t, fakeAppImage.SavedNames(), append([]string{fakeAppImage.Name()}, additionalNames...))
+				h.AssertContains(t, fakeAppImage.SavedNames(), append(additionalNames, fakeAppImage.Name())...)
 			})
 		})
 
@@ -611,7 +611,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 
 			it("saves the image for all provided additionalNames", func() {
 				h.AssertNil(t, exporter.Export(layersDir, appDir, fakeAppImage, metadata.AppImageMetadata{}, additionalNames, launcherPath, stack))
-				h.AssertEq(t, fakeAppImage.SavedNames(), append([]string{fakeAppImage.Name()}, additionalNames...))
+				h.AssertContains(t, fakeAppImage.SavedNames(), append(additionalNames, fakeAppImage.Name())...)
 			})
 		})
 

@@ -43,15 +43,19 @@ func AssertEq(t *testing.T, actual, expected interface{}) {
 	}
 }
 
-func AssertContains(t *testing.T, slice []string, expected string) {
+func AssertContains(t *testing.T, slice []string, elements ...string) {
 	t.Helper()
-	for _, actual := range slice {
-		if diff := cmp.Diff(actual, expected); diff == "" {
-			return
-		}
-	}
-	t.Fatalf("Expected %+v to contain: %s", slice, expected)
 
+outer:
+	for _, el := range elements {
+		for _, actual := range slice {
+			if diff := cmp.Diff(actual, el); diff == "" {
+				continue outer
+			}
+		}
+
+		t.Fatalf("Expected %+v to contain: %s", slice, el)
+	}
 }
 
 func AssertStringContains(t *testing.T, str string, expected string) {

@@ -22,8 +22,6 @@ type Exporter struct {
 	UID, GID     int
 }
 
-var FailedToSaveError = errors.New("one or more image names failed to save")
-
 func (e *Exporter) Export(
 	layersDir,
 	appDir string,
@@ -116,49 +114,56 @@ func (e *Exporter) Export(
 	if err != nil {
 		return errors.Wrap(err, "marshall metadata")
 	}
-	if err := workingImage.SetLabel(metadata.AppMetadataLabel, string(data)); err != nil {
+
+	if err = workingImage.SetLabel(metadata.AppMetadataLabel, string(data)); err != nil {
 		return errors.Wrap(err, "set app image metadata label")
 	}
 
-	if err := workingImage.SetEnv(cmd.EnvLayersDir, layersDir); err != nil {
+	if err = workingImage.SetEnv(cmd.EnvLayersDir, layersDir); err != nil {
 		return errors.Wrapf(err, "set app image env %s", cmd.EnvLayersDir)
 	}
 
-	if err := workingImage.SetEnv(cmd.EnvAppDir, appDir); err != nil {
+	if err = workingImage.SetEnv(cmd.EnvAppDir, appDir); err != nil {
 		return errors.Wrapf(err, "set app image env %s", cmd.EnvAppDir)
 	}
 
-	if err := workingImage.SetEntrypoint(launcher); err != nil {
+	if err = workingImage.SetEntrypoint(launcher); err != nil {
 		return errors.Wrap(err, "setting entrypoint")
 	}
 
-	if err := workingImage.SetCmd(); err != nil { // Note: Command intentionally empty
+	if err = workingImage.SetCmd(); err != nil { // Note: Command intentionally empty
 		return errors.Wrap(err, "setting cmd")
 	}
 
-	result := workingImage.Save(additionalNames...)
-
-	if result.Digest != "" {
-		e.Out.Printf("\n*** Digest: %s\n", result.Digest)
+	err = workingImage.Save(additionalNames...)
+	if _, isSaveErr := err.(imgutil.SaveError); err != nil && !isSaveErr {
+		return errors.Wrap(err, "saving image")
 	}
 
-	hasError := false
+	digest, digestErr := workingImage.Digest()
+	if digestErr != nil {
+		return errors.Wrap(digestErr, "getting digest")
+	}
+	e.Out.Printf("\n*** Digest: %s\n", digest)
+
 	e.Out.Println("*** Images:")
 	for _, n := range append([]string{workingImage.Name()}, additionalNames...) {
-		err := result.Outcomes[n]
-		if err == nil {
-			e.Out.Printf("      %s - succeeded\n", n)
-		} else {
-			hasError = true
-			e.Out.Printf("      %s - %s\n", n, err.Error())
+		e.Out.Printf("      %s - %s\n", n, getSaveStatus(err, n))
+	}
+
+	return err
+}
+
+func getSaveStatus(err error, imageName string) string {
+	saveErr, isSaveErr := err.(imgutil.SaveError)
+	if err != nil && isSaveErr {
+		for _, d := range saveErr.Errors {
+			if d.ImageName == imageName {
+				return d.Cause.Error()
+			}
 		}
 	}
-
-	if hasError {
-		return FailedToSaveError
-	}
-
-	return nil
+	return "succeeded"
 }
 
 func (e *Exporter) addOrReuseLayer(image imgutil.Image, layer identifiableLayer, previousSha string) (string, error) {

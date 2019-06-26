@@ -80,20 +80,32 @@ func (c *cachingImage) GetLayer(sha string) (io.ReadCloser, error) {
 	}
 }
 
-func (c *cachingImage) Save(additionalNames ...string) imgutil.SaveResult {
-	result := c.image.Save(additionalNames...)
-	err := result.Outcomes[c.Name()]
+func (c *cachingImage) Save(additionalNames ...string) error {
+	err := c.image.Save(additionalNames...)
 
-	if err == nil {
+	if saveSucceededFor(c.Name(), err) {
 		if err := c.cache.Commit(); err != nil {
-			return imgutil.NewFailedResult(
-				append([]string{c.Name()}, additionalNames...),
-				errors.Wrap(err, "failed to commit cache"),
-			)
+			return errors.Wrap(err, "failed to commit cache")
 		}
 	}
 
-	return result
+	return err
+}
+
+func saveSucceededFor(imageName string, err error) bool {
+	if err == nil {
+		return true
+	}
+
+	if saveErr, isSaveErr := err.(imgutil.SaveError); isSaveErr {
+		for _, d := range saveErr.Errors {
+			if d.ImageName == imageName {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // delegates to image

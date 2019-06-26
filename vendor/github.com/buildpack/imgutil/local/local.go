@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/buildpack/imgutil"
 	"io"
 	"io/ioutil"
 	"os"
@@ -21,9 +20,12 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/buildpack/imgutil"
 )
 
 type Image struct {
+	baseInspect      *types.ImageInspect
 	repoName         string
 	docker           *client.Client
 	inspect          types.ImageInspect
@@ -42,33 +44,54 @@ type FileSystemLocalImage struct {
 type ImageOption func(image *Image) (*Image, error)
 
 func WithPreviousImage(imageName string) ImageOption {
-	return func(l *Image) (*Image, error) {
-		if _, err := inspectOptionalImage(l.docker, imageName); err != nil {
-			return l, err
+	return func(i *Image) (*Image, error) {
+		if _, err := inspectOptionalImage(i.docker, imageName); err != nil {
+			return i, err
 		}
 
-		l.prevName = imageName
+		i.prevName = imageName
 
-		return l, nil
+		return i, nil
 	}
 }
 
 func FromBaseImage(imageName string) ImageOption {
-	return func(l *Image) (*Image, error) {
+	return func(i *Image) (*Image, error) {
 		var (
 			err     error
 			inspect types.ImageInspect
 		)
 
-		if inspect, err = inspectOptionalImage(l.docker, imageName); err != nil {
-			return l, err
+		if inspect, err = inspectOptionalImage(i.docker, imageName); err != nil {
+			return i, err
 		}
 
-		l.inspect = inspect
-		l.layerPaths = make([]string, len(l.inspect.RootFS.Layers))
+		i.inspect = inspect
+		i.layerPaths = make([]string, len(i.inspect.RootFS.Layers))
 
-		return l, nil
+		baseInspect, err := copyInspect(inspect)
+		if err != nil {
+			return nil, err
+		}
+
+		i.baseInspect = &baseInspect
+
+		return i, nil
 	}
+}
+
+func copyInspect(inspect types.ImageInspect) (types.ImageInspect, error) {
+	bytes, err := json.Marshal(inspect)
+	if err != nil {
+		return types.ImageInspect{}, err
+	}
+
+	ret := types.ImageInspect{}
+	if json.Unmarshal(bytes, &ret) != nil {
+		return types.ImageInspect{}, err
+	}
+
+	return ret, nil
 }
 
 func NewImage(repoName string, dockerClient *client.Client, ops ...ImageOption) (imgutil.Image, error) {
@@ -92,13 +115,13 @@ func NewImage(repoName string, dockerClient *client.Client, ops ...ImageOption) 
 	return image, nil
 }
 
-func (l *Image) Label(key string) (string, error) {
-	labels := l.inspect.Config.Labels
+func (i *Image) Label(key string) (string, error) {
+	labels := i.inspect.Config.Labels
 	return labels[key], nil
 }
 
-func (l *Image) Env(key string) (string, error) {
-	for _, envVar := range l.inspect.Config.Env {
+func (i *Image) Env(key string) (string, error) {
+	for _, envVar := range i.inspect.Config.Env {
 		parts := strings.Split(envVar, "=")
 		if parts[0] == key {
 			return parts[1], nil
@@ -107,22 +130,22 @@ func (l *Image) Env(key string) (string, error) {
 	return "", nil
 }
 
-func (l *Image) Rename(name string) {
-	l.easyAddLayers = nil
-	if prevInspect, _, err := l.docker.ImageInspectWithRaw(context.TODO(), name); err == nil {
-		if l.sameBase(prevInspect) {
-			l.easyAddLayers = prevInspect.RootFS.Layers[len(l.inspect.RootFS.Layers):]
+func (i *Image) Rename(name string) {
+	i.easyAddLayers = nil
+	if prevInspect, _, err := i.docker.ImageInspectWithRaw(context.TODO(), name); err == nil {
+		if i.sameBase(prevInspect) {
+			i.easyAddLayers = prevInspect.RootFS.Layers[len(i.inspect.RootFS.Layers):]
 		}
 	}
 
-	l.repoName = name
+	i.repoName = name
 }
 
-func (l *Image) sameBase(prevInspect types.ImageInspect) bool {
-	if len(prevInspect.RootFS.Layers) < len(l.inspect.RootFS.Layers) {
+func (i *Image) sameBase(prevInspect types.ImageInspect) bool {
+	if len(prevInspect.RootFS.Layers) < len(i.inspect.RootFS.Layers) {
 		return false
 	}
-	for i, baseLayer := range l.inspect.RootFS.Layers {
+	for i, baseLayer := range i.inspect.RootFS.Layers {
 		if baseLayer != prevInspect.RootFS.Layers[i] {
 			return false
 		}
@@ -130,30 +153,63 @@ func (l *Image) sameBase(prevInspect types.ImageInspect) bool {
 	return true
 }
 
-func (l *Image) Name() string {
-	return l.repoName
+func (i *Image) Name() string {
+	return i.repoName
 }
 
-func (l *Image) Found() bool {
-	return l.inspect.ID != ""
+func (i *Image) Found() bool {
+	return i.inspect.ID != ""
 }
 
-func (l *Image) Digest() (string, error) {
-	if !l.Found() {
-		return "", fmt.Errorf("failed to get digest, image '%s' does not exist", l.repoName)
+func (i *Image) Digest() (string, error) {
+	eq, err := inspectsEqual(i.baseInspect, i.inspect)
+	if err != nil {
+		return "", err
 	}
-	if len(l.inspect.RepoDigests) == 0 {
+
+	if eq {
+		return parseDigest(*i.baseInspect, i.repoName)
+	}
+
+	configFile, err := i.configFile()
+	if err != nil {
+		return "", errors.Wrap(err, "generate config file")
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(configFile)), nil
+}
+
+func inspectsEqual(baseInspect *types.ImageInspect, currentInspect types.ImageInspect) (bool, error) {
+	if baseInspect == nil {
+		return false, nil
+	}
+
+	baseBytes, err := json.Marshal(baseInspect)
+	if err != nil {
+		return false, err
+	}
+
+	currentBytes, err := json.Marshal(currentInspect)
+	if err != nil {
+		return false, err
+	}
+
+	return string(baseBytes) == string(currentBytes), nil
+}
+
+func parseDigest(inspect types.ImageInspect, repoName string) (string, error) {
+	if len(inspect.RepoDigests) == 0 {
 		return "", nil
 	}
-	parts := strings.Split(l.inspect.RepoDigests[0], "@")
+	repoDigest := inspect.RepoDigests[0]
+	parts := strings.Split(repoDigest, "@")
 	if len(parts) != 2 {
-		return "", fmt.Errorf("failed to get digest, image '%s' has malformed digest '%s'", l.repoName, l.inspect.RepoDigests[0])
+		return "", fmt.Errorf("failed to get digest, image '%s' has malformed digest '%s'", repoName, repoDigest)
 	}
 	return parts[1], nil
 }
 
-func (l *Image) CreatedAt() (time.Time, error) {
-	createdAtTime := l.inspect.Created
+func (i *Image) CreatedAt() (time.Time, error) {
+	createdAtTime := i.inspect.Created
 	createdTime, err := time.Parse(time.RFC3339Nano, createdAtTime)
 
 	if err != nil {
@@ -162,31 +218,31 @@ func (l *Image) CreatedAt() (time.Time, error) {
 	return createdTime, nil
 }
 
-func (l *Image) Rebase(baseTopLayer string, newBase imgutil.Image) error {
+func (i *Image) Rebase(baseTopLayer string, newBase imgutil.Image) error {
 	ctx := context.Background()
 
 	// FIND TOP LAYER
 	keepLayers := -1
-	for i, diffID := range l.inspect.RootFS.Layers {
+	for idx, diffID := range i.inspect.RootFS.Layers {
 		if diffID == baseTopLayer {
-			keepLayers = len(l.inspect.RootFS.Layers) - i - 1
+			keepLayers = len(i.inspect.RootFS.Layers) - idx - 1
 			break
 		}
 	}
 	if keepLayers == -1 {
-		return fmt.Errorf("'%s' not found in '%s' during rebase", baseTopLayer, l.repoName)
+		return fmt.Errorf("'%s' not found in '%s' during rebase", baseTopLayer, i.repoName)
 	}
 
 	// SWITCH BASE LAYERS
-	newBaseInspect, _, err := l.docker.ImageInspectWithRaw(ctx, newBase.Name())
+	newBaseInspect, _, err := i.docker.ImageInspectWithRaw(ctx, newBase.Name())
 	if err != nil {
 		return errors.Wrap(err, "analyze read previous image config")
 	}
-	l.inspect.RootFS.Layers = newBaseInspect.RootFS.Layers
-	l.layerPaths = make([]string, len(l.inspect.RootFS.Layers))
+	i.inspect.RootFS.Layers = newBaseInspect.RootFS.Layers
+	i.layerPaths = make([]string, len(i.inspect.RootFS.Layers))
 
 	// DOWNLOAD IMAGE
-	fsImage, err := l.downloadImageOnce(l.repoName)
+	fsImage, err := i.downloadImageOnce(i.repoName)
 	if err != nil {
 		return err
 	}
@@ -206,7 +262,7 @@ func (l *Image) Rebase(baseTopLayer string, newBase imgutil.Image) error {
 
 	// ADD EXISTING LAYERS
 	for _, filename := range manifest[0].Layers[(len(manifest[0].Layers) - keepLayers):] {
-		if err := l.AddLayer(filepath.Join(fsImage.dir, filename)); err != nil {
+		if err := i.AddLayer(filepath.Join(fsImage.dir, filename)); err != nil {
 			return err
 		}
 	}
@@ -214,60 +270,60 @@ func (l *Image) Rebase(baseTopLayer string, newBase imgutil.Image) error {
 	return nil
 }
 
-func (l *Image) SetLabel(key, val string) error {
-	if l.inspect.Config.Labels == nil {
-		l.inspect.Config.Labels = map[string]string{}
+func (i *Image) SetLabel(key, val string) error {
+	if i.inspect.Config.Labels == nil {
+		i.inspect.Config.Labels = map[string]string{}
 	}
 
-	l.inspect.Config.Labels[key] = val
+	i.inspect.Config.Labels[key] = val
 	return nil
 }
 
-func (l *Image) SetEnv(key, val string) error {
-	l.inspect.Config.Env = append(l.inspect.Config.Env, fmt.Sprintf("%s=%s", key, val))
+func (i *Image) SetEnv(key, val string) error {
+	i.inspect.Config.Env = append(i.inspect.Config.Env, fmt.Sprintf("%s=%s", key, val))
 	return nil
 }
 
-func (l *Image) SetWorkingDir(dir string) error {
-	l.inspect.Config.WorkingDir = dir
+func (i *Image) SetWorkingDir(dir string) error {
+	i.inspect.Config.WorkingDir = dir
 	return nil
 }
 
-func (l *Image) SetEntrypoint(ep ...string) error {
-	l.inspect.Config.Entrypoint = ep
+func (i *Image) SetEntrypoint(ep ...string) error {
+	i.inspect.Config.Entrypoint = ep
 	return nil
 }
 
-func (l *Image) SetCmd(cmd ...string) error {
-	l.inspect.Config.Cmd = cmd
+func (i *Image) SetCmd(cmd ...string) error {
+	i.inspect.Config.Cmd = cmd
 	return nil
 }
 
-func (l *Image) TopLayer() (string, error) {
-	all := l.inspect.RootFS.Layers
+func (i *Image) TopLayer() (string, error) {
+	all := i.inspect.RootFS.Layers
 
 	if len(all) == 0 {
-		return "", fmt.Errorf("image '%s' has no layers", l.repoName)
+		return "", fmt.Errorf("image '%s' has no layers", i.repoName)
 	}
 
 	topLayer := all[len(all)-1]
 	return topLayer, nil
 }
 
-func (l *Image) GetLayer(sha string) (io.ReadCloser, error) {
-	fsImage, err := l.downloadImageOnce(l.repoName)
+func (i *Image) GetLayer(sha string) (io.ReadCloser, error) {
+	fsImage, err := i.downloadImageOnce(i.repoName)
 	if err != nil {
 		return nil, err
 	}
 
 	layerID, ok := fsImage.layersMap[sha]
 	if !ok {
-		return nil, fmt.Errorf("image '%s' does not contain layer with diff ID '%s'", l.repoName, sha)
+		return nil, fmt.Errorf("image '%s' does not contain layer with diff ID '%s'", i.repoName, sha)
 	}
 	return os.Open(filepath.Join(fsImage.dir, layerID))
 }
 
-func (l *Image) AddLayer(path string) error {
+func (i *Image) AddLayer(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return errors.Wrapf(err, "AddLayer: open layer: %s", path)
@@ -279,77 +335,77 @@ func (l *Image) AddLayer(path string) error {
 	}
 	sha := hex.EncodeToString(hasher.Sum(make([]byte, 0, hasher.Size())))
 
-	l.inspect.RootFS.Layers = append(l.inspect.RootFS.Layers, "sha256:"+sha)
-	l.layerPaths = append(l.layerPaths, path)
-	l.easyAddLayers = nil
+	i.inspect.RootFS.Layers = append(i.inspect.RootFS.Layers, "sha256:"+sha)
+	i.layerPaths = append(i.layerPaths, path)
+	i.easyAddLayers = nil
 
 	return nil
 }
 
-func (l *Image) ReuseLayer(sha string) error {
-	if len(l.easyAddLayers) > 0 && l.easyAddLayers[0] == sha {
-		l.inspect.RootFS.Layers = append(l.inspect.RootFS.Layers, sha)
-		l.layerPaths = append(l.layerPaths, "")
-		l.easyAddLayers = l.easyAddLayers[1:]
+func (i *Image) ReuseLayer(sha string) error {
+	if len(i.easyAddLayers) > 0 && i.easyAddLayers[0] == sha {
+		i.inspect.RootFS.Layers = append(i.inspect.RootFS.Layers, sha)
+		i.layerPaths = append(i.layerPaths, "")
+		i.easyAddLayers = i.easyAddLayers[1:]
 		return nil
 	}
 
-	if l.prevName == "" {
+	if i.prevName == "" {
 		return errors.New("no previous image provided to reuse layers from")
 	}
 
-	fsImage, err := l.downloadImageOnce(l.prevName)
+	fsImage, err := i.downloadImageOnce(i.prevName)
 	if err != nil {
 		return err
 	}
 
 	reuseLayer, ok := fsImage.layersMap[sha]
 	if !ok {
-		return fmt.Errorf("SHA %s was not found in %s", sha, l.repoName)
+		return fmt.Errorf("SHA %s was not found in %s", sha, i.repoName)
 	}
 
-	return l.AddLayer(filepath.Join(fsImage.dir, reuseLayer))
+	return i.AddLayer(filepath.Join(fsImage.dir, reuseLayer))
 }
 
-func (l *Image) Save(additionalNames ...string) imgutil.SaveResult {
-	var (
-		err  error
-		errs = map[string]error{}
-	)
+func (i *Image) Save(additionalNames ...string) error {
+	i.inspect.Created = time.Now().Format(time.RFC3339)
 
-	allNames := append([]string{l.repoName}, additionalNames...)
-
-	ctx := context.Background()
-	digest, err := l.doSave()
-	if err != nil {
-		return imgutil.NewFailedResult(allNames, err)
+	if err := i.doSave(); err != nil {
+		saveErr := imgutil.SaveError{}
+		for _, n := range append([]string{i.Name()}, additionalNames...) {
+			saveErr.Errors = append(saveErr.Errors, imgutil.SaveDiagnostic{ImageName: n, Cause: err})
+		}
+		return saveErr
 	}
 
-	errs[l.repoName] = nil
+	var errs []imgutil.SaveDiagnostic
 	for _, n := range additionalNames {
-		errs[n] = l.docker.ImageTag(ctx, l.repoName, n)
+		if err := i.docker.ImageTag(context.Background(), i.repoName, n); err != nil {
+			errs = append(errs, imgutil.SaveDiagnostic{ImageName: n, Cause: err})
+		}
 	}
 
-	return imgutil.SaveResult{
-		Digest:   digest,
-		Outcomes: errs,
+	if len(errs) > 0 {
+		return imgutil.SaveError{Errors: errs}
 	}
+
+	return nil
 }
 
-func (l *Image) doSave() (string, error) {
+func (i *Image) doSave() error {
 	ctx := context.Background()
 	done := make(chan error)
 
-	t, err := name.NewTag(l.repoName, name.WeakValidation)
+	t, err := name.NewTag(i.repoName, name.WeakValidation)
 	if err != nil {
-		return "", err
+		return err
 	}
 	repoName := t.String()
 
 	pr, pw := io.Pipe()
 	defer pw.Close()
 	go func() {
-		res, err := l.docker.ImageLoad(ctx, pr, true)
+		res, err := i.docker.ImageLoad(ctx, pr, true)
 		if err != nil {
 			done <- err
 			return
@@ -363,18 +419,18 @@ func (l *Image) doSave() (string, error) {
 	tw := tar.NewWriter(pw)
 	defer tw.Close()
 
-	configFile, err := l.configFile()
+	configFile, err := i.configFile()
 	if err != nil {
-		return "", errors.Wrap(err, "generate config file")
+		return errors.Wrap(err, "generate config file")
 	}
 
-	imgID := fmt.Sprintf("%x", sha256.Sum256(configFile))
-	if err := addTextToTar(tw, imgID+".json", configFile); err != nil {
-		return "", err
+	digest := fmt.Sprintf("%x", sha256.Sum256(configFile))
+	if err := addTextToTar(tw, digest+".json", configFile); err != nil {
+		return err
 	}
 
 	var layerPaths []string
-	for _, path := range l.layerPaths {
+	for _, path := range i.layerPaths {
 		if path == "" {
 			layerPaths = append(layerPaths, "")
 			continue
@@ -382,11 +438,11 @@ func (l *Image) doSave() (string, error) {
 		layerName := fmt.Sprintf("/%x.tar", sha256.Sum256([]byte(path)))
 		f, err := os.Open(path)
 		if err != nil {
-			return "", err
+			return err
 		}
 		defer f.Close()
 		if err := addFileToTar(tw, layerName, f); err != nil {
-			return "", err
+			return err
 		}
 		f.Close()
 		layerPaths = append(layerPaths, layerName)
@@ -395,63 +451,64 @@ func (l *Image) doSave() (string, error) {
 
 	manifest, err := json.Marshal([]map[string]interface{}{
 		{
-			"Config":   imgID + ".json",
+			"Config":   digest + ".json",
 			"RepoTags": []string{repoName},
 			"Layers":   layerPaths,
 		},
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	if err := addTextToTar(tw, "manifest.json", manifest); err != nil {
-		return "", err
+		return err
 	}
 
 	tw.Close()
 	pw.Close()
 	err = <-done
 
-	l.requestGroup.Forget(l.repoName)
+	i.requestGroup.Forget(i.repoName)
 
-	if _, _, err = l.docker.ImageInspectWithRaw(context.Background(), imgID); err != nil {
+	_, _, err = i.docker.ImageInspectWithRaw(context.Background(), digest)
+	if err != nil {
 		if client.IsErrNotFound(err) {
-			return "", errors.Wrapf(err, "save image '%s'", l.repoName)
+			return errors.Wrapf(err, "save image '%s'", i.repoName)
 		}
-		return "", err
+		return err
 	}
 
-	return imgID, err
+	return nil
 }
 
-func (l *Image) configFile() ([]byte, error) {
+func (i *Image) configFile() ([]byte, error) {
 	imgConfig := map[string]interface{}{
 		"os":      "linux",
-		"created": time.Now().Format(time.RFC3339),
-		"config":  l.inspect.Config,
+		"created": i.inspect.Created,
+		"config":  i.inspect.Config,
 		"rootfs": map[string][]string{
-			"diff_ids": l.inspect.RootFS.Layers,
+			"diff_ids": i.inspect.RootFS.Layers,
 		},
-		"history": make([]struct{}, len(l.inspect.RootFS.Layers)),
+		"history": make([]struct{}, len(i.inspect.RootFS.Layers)),
 	}
 	return json.Marshal(imgConfig)
 }
 
-func (l *Image) Delete() error {
-	if !l.Found() {
+func (i *Image) Delete() error {
+	if !i.Found() {
 		return nil
 	}
 	options := types.ImageRemoveOptions{
 		Force:         true,
 		PruneChildren: true,
 	}
-	_, err := l.docker.ImageRemove(context.Background(), l.inspect.ID, options)
+	_, err := i.docker.ImageRemove(context.Background(), i.inspect.ID, options)
 	return err
 }
 
-func (l *Image) downloadImageOnce(imageName string) (*FileSystemLocalImage, error) {
-	v, err, _ := l.requestGroup.Do(imageName, func() (details interface{}, err error) {
-		return downloadImage(l.docker, imageName)
+func (i *Image) downloadImageOnce(imageName string) (*FileSystemLocalImage, error) {
+	v, err, _ := i.requestGroup.Do(imageName, func() (details interface{}, err error) {
+		return downloadImage(i.docker, imageName)
 	})
 
 	if err != nil {
@@ -617,8 +674,6 @@ func inspectOptionalImage(docker *client.Client, imageName string) (types.ImageI
 
 func defaultInspect() types.ImageInspect {
 	return types.ImageInspect{
-		Config: &container.Config{
-			Labels: map[string]string{},
-		},
+		Config: &container.Config{},
 	}
 }

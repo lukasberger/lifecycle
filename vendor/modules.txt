@@ -2,7 +2,7 @@
 github.com/BurntSushi/toml
 # github.com/Microsoft/go-winio v0.4.12
 github.com/Microsoft/go-winio
-# github.com/buildpack/imgutil v0.0.0-20190624192032-27a408e358ce
+# github.com/buildpack/imgutil v0.0.0-20190626194443-c4136893947a
 github.com/buildpack/imgutil
 github.com/buildpack/imgutil/local
 github.com/buildpack/imgutil/remote
@@ -77,7 +77,7 @@ golang.org/x/sync/singleflight
 golang.org/x/sync/errgroup
 # golang.org/x/sys v0.0.0-20190509141414-a5b02f93d862
 golang.org/x/sys/windows
-# golang.org/x/tools v0.0.0-20190621195816-6e04913cbbac
+# golang.org/x/tools v0.0.0-20190624190245-7f2218787638
 golang.org/x/tools/cmd/goimports
 golang.org/x/tools/internal/imports
 golang.org/x/tools/go/ast/astutil

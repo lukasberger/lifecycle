@@ -9,11 +9,11 @@ Helpful utilities for working with images
 To format:
 
 ```bash
-$ ./bin/format
+$ make format imports
 ```
 
 To run tests:
 
 ```bash
-$ go test
+$ make test
 ```

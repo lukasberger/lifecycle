@@ -11,6 +11,10 @@ github.com/buildpack/imgutil v0.0.0-20190621192818-ac98480e2190 h1:mxThMLkNXOGhY
 github.com/buildpack/imgutil v0.0.0-20190621192818-ac98480e2190/go.mod h1:E3o86fleh0EQVzrk+u4drkBygnYf0ENgOQ0QAuVpZHE=
 github.com/buildpack/imgutil v0.0.0-20190624192032-27a408e358ce h1:o3/h9NEwblg6hWdsi3S1MbH7P5SYfrAI37ofbtGjf6U=
 github.com/buildpack/imgutil v0.0.0-20190624192032-27a408e358ce/go.mod h1:E3o86fleh0EQVzrk+u4drkBygnYf0ENgOQ0QAuVpZHE=
+github.com/buildpack/imgutil v0.0.0-20190626174308-113cc30a568e h1:KxesL71YZEkYpKLWk6++n/sPShzckR+CQIYSlgDgF8o=
+github.com/buildpack/imgutil v0.0.0-20190626174308-113cc30a568e/go.mod h1:X0yFLGZtSyTXsEJq9NaPP9Rdnaq+3wouZ7xaTgw1680=
+github.com/buildpack/imgutil v0.0.0-20190626194443-c4136893947a h1:Af94WR7N13znbEwF/pRBGHfrLs2lLAhSlQYatbf0ZJg=
+github.com/buildpack/imgutil v0.0.0-20190626194443-c4136893947a/go.mod h1:X0yFLGZtSyTXsEJq9NaPP9Rdnaq+3wouZ7xaTgw1680=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -126,6 +130,8 @@ golang.org/x/tools v0.0.0-20190311212946-11955173bddd/go.mod h1:LCzVGOaR6xXOjkQ3
 golang.org/x/tools v0.0.0-20190425150028-36563e24a262/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
 golang.org/x/tools v0.0.0-20190621195816-6e04913cbbac h1:MQEvx39qSf8vyrx3XRaOe+j1UDIzKwkYOVObRgGPVqI=
 golang.org/x/tools v0.0.0-20190621195816-6e04913cbbac/go.mod h1:/rFqwRUd4F7ZHNgwSSTFct+R/Kf4OFW1sUzUTQQTgfc=
+golang.org/x/tools v0.0.0-20190624190245-7f2218787638 h1:uIfBkD8gLczr4XDgYpt/qJYds2YJwZRNw4zs7wSnNhk=
+golang.org/x/tools v0.0.0-20190624190245-7f2218787638/go.mod h1:/rFqwRUd4F7ZHNgwSSTFct+R/Kf4OFW1sUzUTQQTgfc=
 google.golang.org/appengine v1.1.0/go.mod h1:EbEs0AVv82hx2wNQdGPgUI5lhzA/G0D9YwlJXL52JkM=
 google.golang.org/appengine v1.4.0/go.mod h1:xpcJRLb0r/rnEns0DIKYYv+WjYCduHsrkT7/EB5XEv4=
 google.golang.org/appengine v1.5.0/go.mod h1:xpcJRLb0r/rnEns0DIKYYv+WjYCduHsrkT7/EB5XEv4=

@@ -171,7 +171,7 @@ func export() error {
 	}
 
 	if err := exporter.Export(layersDir, appDir, appImage, analyzedMD.Metadata, repoNames[1:], launcherPath, stackMD); err != nil {
-		if err == lifecycle.FailedToSaveError {
+		if _, isSaveError := err.(imgutil.SaveError); isSaveError {
 			return cmd.FailErrCode(err, cmd.CodeFailedSave, "export")
 		}
 

@@ -1,26 +1,26 @@
 package imgutil
 
 import (
+	"fmt"
 	"io"
 	"time"
 )
 
-type SaveResult struct {
-	// Digest is the digest of the image
-	Digest string
-	// Outcomes is a map of image name to `error` or `nil` if saved properly.
-	Outcomes map[string]error
+type SaveDiagnostic struct {
+	ImageName string
+	Cause     error
 }
 
-func NewFailedResult(imageNames []string, err error) SaveResult {
-	errs := map[string]error{}
-	for _, n := range imageNames {
-		errs[n] = err
-	}
+type SaveError struct {
+	Errors []SaveDiagnostic
+}
 
-	return SaveResult{
-		Outcomes: errs,
+func (e SaveError) Error() string {
+	var failed []string
+	for _, d := range e.Errors {
+		failed = append(failed, d.ImageName)
 	}
+	return fmt.Sprintf("failed to write image to the following tags: %+v", failed)
 }
 
 type Image interface {
@@ -39,7 +39,7 @@ type Image interface {
 	ReuseLayer(sha string) error
 	TopLayer() (string, error)
 	// Save saves the image as `Name()` and any additional names provided to this method.
-	Save(additionalNames ...string) SaveResult
+	Save(additionalNames ...string) error
 	// Found tells whether the image exists in the repository by `Name()`.
 	Found() bool
 	GetLayer(sha string) (io.ReadCloser, error)
