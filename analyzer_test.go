@@ -494,6 +494,35 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 						h.AssertContains(t, entries, `[metadata]`)
 					})
 				})
+
+				when("skip-layers is true", func() {
+					it.Before(func() {
+						analyzer.SkipLayers = true
+					})
+
+					it("should write analyzed TOML", func() {
+						err := analyzer.Analyze(image)
+						h.AssertNil(t, err)
+
+						b, err := ioutil.ReadFile(analyzer.AnalyzedPath)
+						h.AssertNil(t, err)
+
+						entries := strings.Split(string(b), "\n")
+						h.AssertContains(t, entries, `repository = "image-repo-name"`)
+						h.AssertContains(t, entries, `digest = "s0m3D1g3sT"`)
+						h.AssertContains(t, entries, `[metadata]`)
+					})
+
+					it("does not write buildpack layers", func() {
+						err := analyzer.Analyze(image)
+						h.AssertNil(t, err)
+
+						fileInfos, err := ioutil.ReadDir(layerDir)
+						h.AssertNil(t, err)
+
+						h.AssertEq(t, len(fileInfos), 0)
+					})
+				})
 			})
 		})
 

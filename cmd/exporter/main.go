@@ -101,13 +101,13 @@ func export() error {
 		ArtifactsDir: artifactsDir,
 	}
 
-	var analyzedMD metadata.AnalyzedMetadata
-	_, err = toml.DecodeFile(analyzedPath, &analyzedMD)
+	analyzedMD, err := parseOptionalAnalyzedMD(outLog, analyzedPath)
 	if err != nil {
-		return cmd.FailErrCode(errors.Wrapf(err, "no analyzed.toml found at path '%s'", analyzedPath), cmd.CodeInvalidArgs, "parse arguments")
+		return cmd.FailErrCode(err, cmd.CodeInvalidArgs, "parse analyzed TOML")
 	}
 
-	if err := validateSingleRegistry(append(repoNames, analyzedMD.Repository)...); err != nil {
+	var registry string
+	if registry, err = ensureSingleRegistry(appendNonEmpty(repoNames, analyzedMD.Repository)...); err != nil {
 		return cmd.FailErrCode(err, cmd.CodeInvalidArgs, "parse arguments")
 	}
 
@@ -122,14 +122,14 @@ func export() error {
 			return cmd.FailErrCode(errors.New("-image is required when there is no stack metadata available"), cmd.CodeInvalidArgs, "parse arguments")
 		}
 
-		runImageRef, err = runImageFromStackToml(stackMD, analyzedMD.Repository)
+		runImageRef, err = runImageFromStackToml(stackMD, registry)
 		if err != nil {
 			return err
 		}
 	}
 
 	if useHelpers {
-		if err := lifecycle.SetupCredHelpers(filepath.Join(os.Getenv("HOME"), ".docker"), analyzedMD.Repository, runImageRef); err != nil {
+		if err := lifecycle.SetupCredHelpers(filepath.Join(os.Getenv("HOME"), ".docker"), repoNames[0], runImageRef); err != nil {
 			return cmd.FailErr(err, "setup credential helpers")
 		}
 	}
@@ -141,12 +141,20 @@ func export() error {
 			return err
 		}
 
+		var opts = []local.ImageOption{
+			local.FromBaseImage(runImageRef),
+		}
+
+		if analyzedMD.Repository != "" {
+			opts = append(opts, local.WithPreviousImage(analyzedMD.FullName()))
+		}
+
 		appImage, err = local.NewImage(
 			repoNames[0],
 			dockerClient,
-			local.FromBaseImage(runImageRef),
-			local.WithPreviousImage(analyzedMD.FullName()),
+			opts...,
 		)
+
 		if err != nil {
 			return cmd.FailErr(err, "access run image")
 		}
@@ -159,11 +167,18 @@ func export() error {
 			appImage = lifecycle.NewCachingImage(appImage, volumeCache)
 		}
 	} else {
+		var opts = []remote.ImageOption{
+			remote.FromBaseImage(runImageRef),
+		}
+
+		if analyzedMD.Repository != "" {
+			opts = append(opts, remote.WithPreviousImage(analyzedMD.FullName()))
+		}
+
 		appImage, err = remote.NewImage(
 			repoNames[0],
 			auth.DefaultEnvKeychain(),
-			remote.FromBaseImage(runImageRef),
-			remote.WithPreviousImage(analyzedMD.FullName()),
+			opts...,
 		)
 		if err != nil {
 			return cmd.FailErr(err, "access run image")
@@ -181,12 +196,31 @@ func export() error {
 	return nil
 }
 
-func runImageFromStackToml(stack metadata.StackMetadata, repoName string) (string, error) {
-	registry, err := image.ParseRegistry(repoName)
-	if err != nil {
-		return "", cmd.FailErrCode(err, cmd.CodeInvalidArgs, "parse image name")
+func appendNonEmpty(slice []string, el string) []string {
+	if el != "" {
+		return append(slice, el)
 	}
 
+	return slice
+}
+
+func parseOptionalAnalyzedMD(logger *log.Logger, path string) (metadata.AnalyzedMetadata, error) {
+	var analyzedMD metadata.AnalyzedMetadata
+
+	_, err := toml.DecodeFile(path, &analyzedMD)
+	if err != nil {
+		if os.IsNotExist(err) {
+			logger.Printf("Warning: analyzed TOML file not found at '%s'", path)
+			return metadata.AnalyzedMetadata{}, nil
+		}
+
+		return metadata.AnalyzedMetadata{}, err
+	}
+
+	return analyzedMD, nil
+}
+
+func runImageFromStackToml(stack metadata.StackMetadata, registry string) (string, error) {
 	runImageMirrors := []string{stack.RunImage.Image}
 	runImageMirrors = append(runImageMirrors, stack.RunImage.Mirrors...)
 	runImageRef, err := image.ByRegistry(registry, runImageMirrors)
@@ -196,17 +230,25 @@ func runImageFromStackToml(stack metadata.StackMetadata, repoName string) (strin
 	return runImageRef, nil
 }
 
-func validateSingleRegistry(repoNames ...string) error {
+func ensureSingleRegistry(repoNames ...string) (string, error) {
 	set := make(map[string]interface{})
+
+	var (
+		err      error
+		registry string
+	)
+
 	for _, repoName := range repoNames {
-		registry, err := image.ParseRegistry(repoName)
+		registry, err = image.ParseRegistry(repoName)
 		if err != nil {
-			return errors.Wrapf(err, "parsing registry from repo '%s'", repoName)
+			return "", errors.Wrapf(err, "parsing registry from repo '%s'", repoName)
 		}
 		set[registry] = nil
 	}
+
 	if len(set) != 1 {
-		return errors.New("exporting to multiple registries is unsupported")
+		return "", errors.New("exporting to multiple registries is unsupported")
 	}
-	return nil
+
+	return registry, nil
 }

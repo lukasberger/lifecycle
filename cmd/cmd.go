@@ -38,6 +38,7 @@ const (
 	EnvUID            = "CNB_USER_ID"
 	EnvGID            = "CNB_GROUP_ID"
 	EnvRegistryAuth   = "CNB_REGISTRY_AUTH"
+	EnvSkipLayers     = "CNB_SKIP_LAYERS" // defaults to false
 )
 
 func FlagAnalyzedPath(dir *string) {
@@ -106,6 +107,10 @@ func FlagUseCredHelpers(use *bool) {
 
 func FlagUseDaemon(use *bool) {
 	flag.BoolVar(use, "daemon", boolEnv(EnvUseDaemon), "export to docker daemon")
+}
+
+func FlagSkipLayers(skip *bool) {
+	flag.BoolVar(skip, "skip-layers", boolEnv(EnvSkipLayers), "do not provide layer metadata to buildpacks")
 }
 
 const (

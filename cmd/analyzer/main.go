@@ -30,6 +30,7 @@ var (
 	useHelpers   bool
 	uid          int
 	gid          int
+	skipLayers   bool
 )
 
 func init() {
@@ -41,6 +42,7 @@ func init() {
 	cmd.FlagUID(&uid)
 	cmd.FlagUseDaemon(&useDaemon)
 	cmd.FlagUseCredHelpers(&useHelpers)
+	cmd.FlagSkipLayers(&skipLayers)
 }
 
 func main() {
@@ -79,6 +81,7 @@ func analyzer() error {
 		Err:          log.New(os.Stderr, "", 0),
 		UID:          uid,
 		GID:          gid,
+		SkipLayers:   skipLayers,
 	}
 
 	var err error
