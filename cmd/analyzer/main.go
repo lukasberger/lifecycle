@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -13,6 +12,7 @@ import (
 	"github.com/buildpack/imgutil"
 	"github.com/buildpack/imgutil/local"
 	"github.com/buildpack/imgutil/remote"
+	"github.com/pkg/errors"
 
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/lifecycle/cmd"
@@ -85,14 +85,14 @@ func analyzer() error {
 	}
 
 	var err error
-	var previousImage imgutil.Image
+	var img imgutil.Image
 
 	if useDaemon {
 		dockerClient, err := docker.DefaultClient()
 		if err != nil {
 			return cmd.FailErr(err, "create docker client")
 		}
-		previousImage, err = local.NewImage(
+		img, err = local.NewImage(
 			repoName,
 			dockerClient,
 			local.FromBaseImage(repoName),
@@ -101,7 +101,7 @@ func analyzer() error {
 			return cmd.FailErr(err, "access previous image")
 		}
 	} else {
-		previousImage, err = remote.NewImage(
+		img, err = remote.NewImage(
 			repoName,
 			auth.DefaultEnvKeychain(),
 			remote.FromBaseImage(repoName),
@@ -111,9 +111,17 @@ func analyzer() error {
 		}
 	}
 
-	if err := analyzer.Analyze(previousImage); err != nil {
+	md, err := analyzer.Analyze(img);
+	if err != nil {
 		return cmd.FailErrCode(err, cmd.CodeFailed, "analyze")
+	}
+
+	if md.Repository != "" {
+		if err := lifecycle.WriteTOML(analyzedPath, md); err != nil {
+			return errors.Wrap(err, "write analyzed.toml")
+		}
 	}
 
 	return nil
 }
+

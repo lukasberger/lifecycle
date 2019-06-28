@@ -21,7 +21,13 @@ type AppImageMetadata struct {
 type AppMetadata struct {
 	SHA string `json:"sha" toml:"sha"`
 }
+// Registry A+
+// registry.com/some/repo:tag -> analyze -> md registry.com/some/repo@sha256:ab1345
+// -> export (previous = some/repo@sha:ab1345) -> some/repo:tag
 
+// Daemon
+// [registry.com/]some/repo:tag -> analyze -> md registry.com/some/repo:tag or bec1c1
+// registry.com/repo/name:tag@sha256:digest
 type AnalyzedMetadata struct {
 	Repository string           `toml:"repository"`
 	Digest     string           `toml:"digest"`
