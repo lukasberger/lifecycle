@@ -118,8 +118,8 @@ func (c *cachingImage) Rename(name string) {
 	c.image.Rename(name)
 }
 
-func (c *cachingImage) Digest() (string, error) {
-	return c.image.Digest()
+func (c *cachingImage) Identifier() (imgutil.Identifier, error) {
+	return c.image.Identifier()
 }
 
 func (c *cachingImage) Label(label string) (string, error) {

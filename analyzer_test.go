@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildpack/imgutil/fakes"
 	"github.com/buildpack/lifecycle/metadata"
+	"github.com/buildpack/imgutil/local"
 	"github.com/golang/mock/gomock"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
@@ -76,7 +77,9 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 		)
 
 		it.Before(func() {
-			image = fakes.NewImage("image-repo-name", "", "s0m3D1g3sT")
+			image = fakes.NewImage("image-repo-name", "", local.IDIdentifier{
+				ImageID: "s0m3D1g3sT",
+			})
 			ref = testmock.NewMockReference(mockCtrl)
 			ref.EXPECT().Name().AnyTimes()
 		})
@@ -200,8 +203,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 					md, err := analyzer.Analyze(image)
 					h.AssertNil(t, err)
 
-					h.AssertEq(t, md.Repository, "image-repo-name")
-					h.AssertEq(t, md.Digest, "s0m3D1g3sT")
+					h.AssertEq(t, md.Image.Reference, "s0m3D1g3sT")
 					h.AssertEq(t, md.Metadata, appImageMetadata)
 				})
 
@@ -500,12 +502,11 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 						analyzer.SkipLayers = true
 					})
 
-					it("should write analyzed TOML", func() {
+					it("should return the analyzed metadata", func() {
 						md, err := analyzer.Analyze(image)
 						h.AssertNil(t, err)
 
-						h.AssertEq(t, md.Repository, "image-repo-name")
-						h.AssertEq(t, md.Digest, "s0m3D1g3sT")
+						h.AssertEq(t, md.Image.Reference, "s0m3D1g3sT")
 						h.AssertEq(t, md.Metadata, appImageMetadata)
 					})
 
@@ -526,7 +527,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 			 var notFoundImage *fakes.Image
 
 			it.Before(func() {
-				notFoundImage = fakes.NewImage("image-repo-name", "", "")
+				notFoundImage = fakes.NewImage("image-repo-name", "", nil)
 				h.AssertNil(t, notFoundImage.Delete())
 			})
 
@@ -546,12 +547,11 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 				}
 			})
 
-			it("should write an analyzed.toml without a digest", func() {
+			it("should return a nil image in the analyzed metadata", func() {
 				md, err := analyzer.Analyze(notFoundImage)
 				h.AssertNil(t, err)
 
-				h.AssertEq(t, md.Repository, "image-repo-name")
-				h.AssertEq(t, md.Digest, "")
+				h.AssertNil(t, md.Image)
 				h.AssertEq(t, md.Metadata, metadata.AppImageMetadata{})
 			})
 		})

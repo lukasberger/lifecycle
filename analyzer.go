@@ -84,14 +84,19 @@ func (a *Analyzer) Analyze(image imgutil.Image) (metadata.AnalyzedMetadata, erro
 		}
 	}
 
-	digest, err := image.Digest()
-	if err != nil {
-		return metadata.AnalyzedMetadata{}, errors.Wrap(err, "retrieve image digest")
+	var imageID *metadata.ImageIdentifier
+	if image.Found() {
+		identifier, err := image.Identifier()
+		if err != nil {
+			return metadata.AnalyzedMetadata{}, errors.Wrap(err, "retrieve image identifier")
+		}
+		imageID = &metadata.ImageIdentifier{
+			Reference: identifier.String(),
+		}
 	}
 
 	return metadata.AnalyzedMetadata{
-		Repository: image.Name(),
-		Digest:     digest,
-		Metadata:   data,
+		Image: imageID,
+		Metadata: data,
 	}, nil
 }

@@ -18,3 +18,5 @@ require (
 	google.golang.org/genproto v0.0.0-20190508193815-b515fa19cec8 // indirect
 	google.golang.org/grpc v1.20.1 // indirect
 )
+
+replace github.com/buildpack/imgutil v0.0.0-20190626194443-c4136893947a => ../imgutil

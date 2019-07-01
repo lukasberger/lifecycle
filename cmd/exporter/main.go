@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -107,7 +108,7 @@ func export() error {
 	}
 
 	var registry string
-	if registry, err = ensureSingleRegistry(appendNonEmpty(repoNames, analyzedMD.Repository)...); err != nil {
+	if registry, err = ensureSingleRegistry(repoNames...); err != nil {
 		return cmd.FailErrCode(err, cmd.CodeInvalidArgs, "parse arguments")
 	}
 
@@ -145,8 +146,8 @@ func export() error {
 			local.FromBaseImage(runImageRef),
 		}
 
-		if analyzedMD.Repository != "" {
-			opts = append(opts, local.WithPreviousImage(analyzedMD.FullName()))
+		if analyzedMD.Image != nil {
+			opts = append(opts, local.WithPreviousImage(analyzedMD.Image.Reference))
 		}
 
 		appImage, err = local.NewImage(
@@ -171,8 +172,15 @@ func export() error {
 			remote.FromBaseImage(runImageRef),
 		}
 
-		if analyzedMD.Repository != "" {
-			opts = append(opts, remote.WithPreviousImage(analyzedMD.FullName()))
+		if analyzedMD.Image != nil {
+			opts = append(opts, remote.WithPreviousImage(analyzedMD.Image.Reference))
+			analyzedRegistry, err := image.ParseRegistry(analyzedMD.Image.Reference)
+			if err != nil {
+				return cmd.FailErr(err, "parse analyzed registry")
+			}
+			if analyzedRegistry != registry {
+				return fmt.Errorf("analyzed image is on a different registry %s from the exported image %s", analyzedRegistry, registry)
+			}
 		}
 
 		appImage, err = remote.NewImage(
@@ -194,14 +202,6 @@ func export() error {
 	}
 
 	return nil
-}
-
-func appendNonEmpty(slice []string, el string) []string {
-	if el != "" {
-		return append(slice, el)
-	}
-
-	return slice
 }
 
 func parseOptionalAnalyzedMD(logger *log.Logger, path string) (metadata.AnalyzedMetadata, error) {

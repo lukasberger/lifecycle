@@ -100,7 +100,10 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				localReusableLayerSha := h.ComputeSHA256ForPath(t, localReusableLayerPath, uid, gid)
 				launcherSHA := h.ComputeSHA256ForPath(t, launcherPath, uid, gid)
 
-				fakeOriginalImage = fakes.NewImage("app/original-image", "original-top-layer-sha", "some-original-run-image-digest")
+				fakeOriginalImage = fakes.NewImage("app/original-image", "original-top-layer-sha",
+
+					"some-original-run-image-digest"
+				)
 				fakeAppImage.AddPreviousLayer("sha256:"+localReusableLayerSha, "")
 				fakeAppImage.AddPreviousLayer("sha256:"+launcherSHA, "")
 				fakeAppImage.AddPreviousLayer("sha256:orig-launch-layer-no-local-dir-sha", "")
@@ -263,7 +266,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 
 				t.Log("adds run image metadata to label")
 				h.AssertEq(t, meta.RunImage.TopLayer, "some-top-layer-sha")
-				h.AssertEq(t, meta.RunImage.SHA, "some-image-digest")
+				h.AssertEq(t, meta.RunImage.Reference, "some-image-digest")
 
 				t.Log("adds layer shas to metadata label")
 				h.AssertEq(t, meta.App.SHA, "sha256:"+appLayerSHA)
@@ -353,7 +356,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				h.AssertStringContains(t,
 					stdout.String(),
 					fmt.Sprintf(
-						`*** Digest: some-image-digest-saved
+						`*** Digest: some-image-digest
 *** Images:
       %s - succeeded
       %s - succeeded
@@ -385,7 +388,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 					h.AssertStringContains(t,
 						stdout.String(),
 						fmt.Sprintf(
-							`*** Digest: some-image-digest-saved
+							`*** Digest: some-image-digest
 *** Images:
       %s - succeeded
       %s - succeeded
@@ -562,7 +565,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 
 				t.Log("adds run image metadata to label")
 				h.AssertEq(t, meta.RunImage.TopLayer, "some-top-layer-sha")
-				h.AssertEq(t, meta.RunImage.SHA, "some-image-digest")
+				h.AssertEq(t, meta.RunImage.Reference, "some-image-digest")
 
 				t.Log("adds layer shas to metadata label")
 				h.AssertEq(t, meta.App.SHA, "sha256:"+appLayerSHA)

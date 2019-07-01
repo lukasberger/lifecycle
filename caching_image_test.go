@@ -37,7 +37,7 @@ func testCachingImage(t *testing.T, when spec.G, it spec.S) {
 
 	it.Before(func() {
 		var err error
-		fakeImage = fakes.NewImage("some-image", "", "")
+		fakeImage = fakes.NewImage("some-image", "", nil)
 		tmpDir, err = ioutil.TempDir("", "")
 		h.AssertNil(t, err)
 		volumeCache, err = cache.NewVolumeCache(tmpDir)

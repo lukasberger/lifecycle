@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"syscall"
@@ -77,9 +78,13 @@ func AssertError(t *testing.T, actual error, expected string) {
 
 func AssertNil(t *testing.T, actual interface{}) {
 	t.Helper()
-	if actual != nil {
+	if !isNil(actual) {
 		t.Fatalf("Expected nil: %s", actual)
 	}
+}
+
+func isNil(value interface{}) bool {
+	return value == nil || (reflect.TypeOf(value).Kind() == reflect.Ptr && reflect.ValueOf(value).IsNil())
 }
 
 func AssertUidGid(t *testing.T, path string, uid, gid int) {

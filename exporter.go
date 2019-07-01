@@ -40,7 +40,12 @@ func (e *Exporter) Export(
 		return errors.Wrap(err, "get run image top layer SHA")
 	}
 
-	meta.RunImage.SHA, err = workingImage.Digest()
+	identifier, err := workingImage.Identifier()
+	if err != nil {
+		return errors.Wrap(err, "get run image id or digest")
+	}
+
+	meta.RunImage.Reference = identifier.String()
 	if err != nil {
 		return errors.Wrap(err, "get run image digest")
 	}
@@ -135,20 +140,21 @@ func (e *Exporter) Export(
 		return errors.Wrap(err, "setting cmd")
 	}
 
-	err = workingImage.Save(additionalNames...)
-	if _, isSaveErr := err.(imgutil.SaveError); err != nil && !isSaveErr {
-		return errors.Wrap(err, "saving image")
+	saveErr := workingImage.Save(additionalNames...)
+	if _, isSaveErr := saveErr.(imgutil.SaveError); saveErr != nil && !isSaveErr {
+		return errors.Wrap(saveErr, "saving image")
 	}
 
-	digest, digestErr := workingImage.Digest()
-	if digestErr != nil {
-		return errors.Wrap(digestErr, "getting digest")
+	id, err := workingImage.Identifier()
+	if err != nil {
+		return errors.Wrap(err, "getting digest")
 	}
-	e.Out.Printf("\n*** Digest: %s\n", digest)
+	//TODO: make it nicer
+	e.Out.Printf("\n*** Reference: %s\n", id.String())
 
-	e.Out.Println("*** Images:")
+	e.Out.Println("*** Image Tags:")
 	for _, n := range append([]string{workingImage.Name()}, additionalNames...) {
-		e.Out.Printf("      %s - %s\n", n, getSaveStatus(err, n))
+		e.Out.Printf("      %s - %s\n", n, getSaveStatus(saveErr, n))
 	}
 
 	return err

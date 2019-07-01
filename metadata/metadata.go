@@ -21,24 +21,14 @@ type AppImageMetadata struct {
 type AppMetadata struct {
 	SHA string `json:"sha" toml:"sha"`
 }
-// Registry A+
-// registry.com/some/repo:tag -> analyze -> md registry.com/some/repo@sha256:ab1345
-// -> export (previous = some/repo@sha:ab1345) -> some/repo:tag
 
-// Daemon
-// [registry.com/]some/repo:tag -> analyze -> md registry.com/some/repo:tag or bec1c1
-// registry.com/repo/name:tag@sha256:digest
 type AnalyzedMetadata struct {
-	Repository string           `toml:"repository"`
-	Digest     string           `toml:"digest"`
-	Metadata   AppImageMetadata `toml:"metadata"`
+	Image    *ImageIdentifier `toml:"image"`
+	Metadata AppImageMetadata `toml:"metadata"`
 }
 
-func (a AnalyzedMetadata) FullName() string {
-	if a.Digest == "" {
-		return a.Repository
-	}
-	return a.Repository + "@" + a.Digest
+type ImageIdentifier struct {
+	Reference string `toml:"reference"`
 }
 
 type ConfigMetadata struct {
@@ -64,8 +54,8 @@ type LayerMetadata struct {
 }
 
 type RunImageMetadata struct {
-	TopLayer string `json:"topLayer" toml:"topLayer"`
-	SHA      string `json:"sha" toml:"sha"`
+	TopLayer  string `json:"topLayer" toml:"top-layer"`
+	Reference string `json:"reference" toml:"reference"`
 }
 
 type StackMetadata struct {

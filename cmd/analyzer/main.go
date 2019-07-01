@@ -111,12 +111,12 @@ func analyzer() error {
 		}
 	}
 
-	md, err := analyzer.Analyze(img);
+	md, err := analyzer.Analyze(img)
 	if err != nil {
 		return cmd.FailErrCode(err, cmd.CodeFailed, "analyze")
 	}
 
-	if md.Repository != "" {
+	if md.Image != nil {
 		if err := lifecycle.WriteTOML(analyzedPath, md); err != nil {
 			return errors.Wrap(err, "write analyzed.toml")
 		}
