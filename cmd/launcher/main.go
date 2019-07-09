@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"github.com/BurntSushi/toml"
@@ -61,7 +60,7 @@ func launch() error {
 		Exec:               syscall.Exec,
 	}
 
-	if err := launcher.Launch(os.Args[0], strings.Join(os.Args[1:], " ")); err != nil {
+	if err := launcher.Launch(os.Args[0], os.Args[1:]); err != nil {
 		return cmd.FailErrCode(err, cmd.CodeFailedLaunch, "launch")
 	}
 	return nil
