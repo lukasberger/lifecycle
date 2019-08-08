@@ -8,8 +8,13 @@ steps:
 - id: 'build'
   name: gcr.io/gae-runtimes/go112_app_builder:argo_current
   dir: /workspace/lifecycle
-  entrypoint: make
-  args: ['all']
+  entrypoint: /bin/bash
+  args:
+  - "-c"
+  - >
+    apt-get update
+    && apt-get install -yq jq 
+    && make all
 
 - id: 'push'
   name: gcr.io/cloud-builders/gsutil
