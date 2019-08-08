@@ -1,0 +1,27 @@
+steps:
+
+- id: 'clone'
+  name: gcr.io/cloud-builders/gcloud
+  args: ['--project=gae-runtimes-dev', 'source', 'repos', 'clone', 'lifecycle']
+
+# The go cloud builder does not have bash which the tests need.
+- id: 'build'
+  name: gcr.io/gae-runtimes/go112_app_builder:argo_current
+  dir: /workspace/lifecycle
+  entrypoint: make
+  args: ['all']
+
+- id: 'push'
+  name: gcr.io/cloud-builders/gsutil
+  dir: /workspace/lifecycle
+  args: ['cp',
+         'out/lifecycle-v0.0.0+linux.x86-64.tgz',
+         'gs://artifacts.${PROJECT_ID}.appspot.com/buildpacks/lifecycle-${BRANCH_NAME}.tgz']
+
+- id: 'acl'
+  name: gcr.io/cloud-builders/gsutil
+  args: ['acl', 'ch', '-u', 'AllUsers:R',
+         'gs://artifacts.${PROJECT_ID}.appspot.com/buildpacks/lifecycle-${BRANCH_NAME}.tgz']
+
+options:
+  machineType: 'N1_HIGHCPU_8'

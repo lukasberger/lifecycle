@@ -53,4 +53,6 @@ clean:
 
 package:
 	@echo "> Packaging lifecycle..."
+	chmod 755 ./out/${ARCHIVE_NAME}/*
 	tar czf ./out/$(ARCHIVE_NAME).tgz -C out $(ARCHIVE_NAME)
+	tar czf ./out/$(ARCHIVE_NAME).tgz -C out $(ARCHIVE_NAME) --owner=root --group=root
