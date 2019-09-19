@@ -80,5 +80,5 @@ clean:
 
 package: descriptor
 	@echo "> Packaging lifecycle..."
-	chmod 755 ./out/${ARCHIVE_NAME}/*
-	tar czf ./out/$(ARCHIVE_NAME).tgz -C out lifecycle.toml $(ARCHIVE_NAME) --owner=root --group=root
+	chmod 755 ./out/lifecycle/*
+	tar czf ./out/$(ARCHIVE_NAME).tgz -C out lifecycle.toml lifecycle --owner=root --group=root
