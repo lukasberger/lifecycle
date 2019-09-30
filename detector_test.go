@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,6 +15,7 @@ import (
 	"github.com/sclevine/spec/report"
 
 	"github.com/buildpack/lifecycle"
+	"github.com/buildpack/lifecycle/internal/mocks"
 )
 
 func TestDetector(t *testing.T) {
@@ -49,7 +49,7 @@ func testDetector(t *testing.T, when spec.G, it spec.S) {
 			AppDir:        appDir,
 			PlatformDir:   platformDir,
 			BuildpacksDir: buildpacksDir,
-			Out:           log.New(io.MultiWriter(outLog, it.Out()), "", 0),
+			Logger:        mocks.NewMockLogger(io.MultiWriter(outLog, it.Out())),
 		}
 	})
 
@@ -119,7 +119,8 @@ func testDetector(t *testing.T, when spec.G, it spec.S) {
 					"pass: A@v1\n"+
 					"pass: B@v1\n"+
 					"Resolving plan... (try #1)\n"+
-					"Success! (2)\n",
+					"A v1\n"+
+					"B v1\n",
 			) {
 				t.Fatalf("Unexpected log:\n%s\n", s)
 			}
@@ -248,7 +249,10 @@ func testDetector(t *testing.T, when spec.G, it spec.S) {
 						"pass: D@v2\n"+
 						"pass: B@v1\n"+
 						"Resolving plan... (try #1)\n"+
-						"Success! (4)\n",
+						"A v1\n"+
+						"C v2\n"+
+						"D v2\n"+
+						"B v1\n",
 				) {
 					t.Fatalf("Unexpected log:\n%s\n", s)
 				}
@@ -352,7 +356,8 @@ func testDetector(t *testing.T, when spec.G, it spec.S) {
 						"Resolving plan... (try #1)\n"+
 						"skip: A@v1 requires dep-missing\n"+
 						"skip: C@v1 provides unused dep-missing\n"+
-						"Success! (1)\n",
+						"1 of 3 buildpacks participating\n"+
+						"B v1\n",
 				) {
 					t.Fatalf("Unexpected log:\n%s\n", s)
 				}
@@ -418,7 +423,10 @@ func testDetector(t *testing.T, when spec.G, it spec.S) {
 					"Resolving plan... (try #16)\n"+
 						"skip: D@v1 requires dep9-missing\n"+
 						"skip: D@v1 provides unused dep10-missing\n"+
-						"Success! (3)\n",
+						"3 of 4 buildpacks participating\n"+
+						"A v1\n"+
+						"B v1\n"+
+						"C v1\n",
 				) {
 					t.Fatalf("Unexpected log:\n%s\n", s)
 				}
