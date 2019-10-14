@@ -2,7 +2,7 @@ export GO111MODULE = on
 
 GOCMD?=go
 GOENV=GOOS=linux GOARCH=amd64 CGO_ENABLED=0
-GOBUILD=$(GOCMD) build -mod=vendor -ldflags "-X 'github.com/buildpack/lifecycle/cmd.Version=$(LIFECYCLE_VERSION)' -X 'github.com/buildpack/lifecycle/cmd.SCMRepository=$(SCM_REPO)' -X 'github.com/buildpack/lifecycle/cmd.SCMCommit=$(SCM_COMMIT)'"
+GOBUILD=$(GOCMD) build -mod=vendor -ldflags "-s -w -X 'github.com/buildpack/lifecycle/cmd.Version=$(LIFECYCLE_VERSION)' -X 'github.com/buildpack/lifecycle/cmd.SCMRepository=$(SCM_REPO)' -X 'github.com/buildpack/lifecycle/cmd.SCMCommit=$(SCM_COMMIT)'"
 GOTEST=$(GOCMD) test -mod=vendor
 LIFECYCLE_VERSION?=0.0.0
 PLATFORM_API=0.1
@@ -24,14 +24,8 @@ all: test build package
 
 build:
 	@echo "> Building lifecycle..."
-	mkdir -p ./out/$(ARCHIVE_NAME)
-	$(GOENV) $(GOBUILD) -o ./out/lifecycle/detector -a ./cmd/detector
-	$(GOENV) $(GOBUILD) -o ./out/lifecycle/restorer -a ./cmd/restorer
-	$(GOENV) $(GOBUILD) -o ./out/lifecycle/analyzer -a ./cmd/analyzer
-	$(GOENV) $(GOBUILD) -o ./out/lifecycle/builder -a ./cmd/builder
-	$(GOENV) $(GOBUILD) -o ./out/lifecycle/exporter -a ./cmd/exporter
-	$(GOENV) $(GOBUILD) -o ./out/lifecycle/cacher -a ./cmd/cacher
-	$(GOENV) $(GOBUILD) -o ./out/lifecycle/launcher -a ./cmd/launcher
+	mkdir -p ./out/lifecycle
+	$(GOENV) $(GOBUILD) -o ./out/lifecycle -a ./cmd/...
 
 descriptor: export LIFECYCLE_DESCRIPTOR:=$(LIFECYCLE_DESCRIPTOR)
 descriptor:
@@ -39,18 +33,25 @@ descriptor:
 	mkdir -p ./out
 	echo "$${LIFECYCLE_DESCRIPTOR}" > ./out/lifecycle.toml
 
-
 install-goimports:
 	@echo "> Installing goimports..."
-	$(GOCMD) install -mod=vendor golang.org/x/tools/cmd/goimports
+	cd tools; $(GOCMD) install -mod=vendor golang.org/x/tools/cmd/goimports
 
 install-yj:
 	@echo "> Installing yj..."
-	$(GOCMD) install -mod=vendor github.com/sclevine/yj
+	cd tools; $(GOCMD) install -mod=vendor github.com/sclevine/yj
 
 install-mockgen:
 	@echo "> Installing mockgen..."
-	$(GOCMD) install -mod=vendor github.com/golang/mock/mockgen
+	cd tools; $(GOCMD) install -mod=vendor github.com/golang/mock/mockgen
+
+install-golangci-lint:
+	@echo "> Installing golangci-lint..."
+	cd tools; $(GOCMD) install -mod=vendor github.com/golangci/golangci-lint/cmd/golangci-lint
+
+lint: install-golangci-lint
+	@echo "> Linting code..."
+	@golangci-lint run -c golangci.yaml
 
 generate: install-mockgen
 	@echo "> Generating..."
@@ -58,19 +59,15 @@ generate: install-mockgen
 
 format: install-goimports
 	@echo "> Formating code..."
-	test -z $$(goimports -l -w -local github.com/buildpack/lifecycle $$(find . -type f -name '*.go' -not -path "./vendor/*"))
-
-vet:
-	@echo "> Vetting code..."
-	$(GOCMD) vet -mod=vendor $$($(GOCMD) list -mod=vendor ./... | grep -v /testdata/)
+	test -z $$(goimports -l -w -local github.com/buildpack/lifecycle $$(find . -type f -name '*.go' -not -path "*/vendor/*"))
 
 test: unit acceptance
 
-unit: format vet install-yj
+unit: format lint install-yj
 	@echo "> Running unit tests..."
 	$(GOTEST) -v -count=1 ./...
 
-acceptance: format vet
+acceptance: format lint
 	@echo "> Running acceptance tests..."
 	$(GOTEST) -v -count=1 -tags=acceptance ./acceptance/...
 

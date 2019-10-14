@@ -7,8 +7,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/buildpack/imgutil"
-	"github.com/buildpack/imgutil/local"
-	"github.com/buildpack/imgutil/remote"
 	"github.com/pkg/errors"
 
 	"github.com/buildpack/lifecycle/archive"
@@ -78,7 +76,8 @@ func (e *Exporter) Export(
 		}
 		bpMD := metadata.BuildpackLayersMetadata{ID: bp.ID, Version: bp.Version, Layers: map[string]metadata.BuildpackLayerMetadata{}}
 
-		for _, layer := range bpDir.findLayers(launch) {
+		layers := bpDir.findLayers(launch)
+		for i, layer := range layers {
 			lmd, err := layer.read()
 			if err != nil {
 				return errors.Wrapf(err, "reading '%s' metadata", layer.Identifier())
@@ -86,7 +85,7 @@ func (e *Exporter) Export(
 
 			if layer.hasLocalContents() {
 				origLayerMetadata := origMetadata.MetadataForBuildpack(bp.ID).Layers[layer.name()]
-				lmd.SHA, err = e.addLayer(workingImage, &layer, origLayerMetadata.SHA)
+				lmd.SHA, err = e.addLayer(workingImage, &layers[i], origLayerMetadata.SHA)
 				if err != nil {
 					return err
 				}
@@ -99,7 +98,8 @@ func (e *Exporter) Export(
 					return fmt.Errorf("cannot reuse '%s', previous image has no metadata for layer '%s'", layer.Identifier(), layer.Identifier())
 				}
 
-				e.Logger.Debugf("Reusing layer '%s' with SHA %s\n", layer.Identifier(), origLayerMetadata.SHA)
+				e.Logger.Infof("Reusing layer '%s'\n", layer.Identifier())
+				e.Logger.Debugf("Layer '%s' SHA: %s\n", layer.Identifier(), origLayerMetadata.SHA)
 				if err := workingImage.ReuseLayer(origLayerMetadata.SHA); err != nil {
 					return errors.Wrapf(err, "reusing layer: '%s'", layer.Identifier())
 				}
@@ -129,7 +129,7 @@ func (e *Exporter) Export(
 	}
 
 	buildMD := &BuildMetadata{}
-	if _, err := toml.DecodeFile(metadata.MetadataFilePath(layersDir), buildMD); err != nil {
+	if _, err := toml.DecodeFile(metadata.FilePath(layersDir), buildMD); err != nil {
 		return errors.Wrap(err, "read build metadata")
 	}
 
@@ -153,7 +153,7 @@ func (e *Exporter) Export(
 		return errors.Wrap(err, "setting cmd")
 	}
 
-	return e.saveImage(workingImage, additionalNames)
+	return saveImage(workingImage, additionalNames, e.Logger)
 }
 
 func (e *Exporter) addLayer(image imgutil.Image, layer identifiableLayer, previousSHA string) (string, error) {
@@ -163,10 +163,12 @@ func (e *Exporter) addLayer(image imgutil.Image, layer identifiableLayer, previo
 		return "", errors.Wrapf(err, "exporting layer '%s'", layer.Identifier())
 	}
 	if sha == previousSHA {
-		e.Logger.Debugf("Reusing layer '%s' with SHA %s\n", layer.Identifier(), sha)
+		e.Logger.Infof("Reusing layer '%s'\n", layer.Identifier())
+		e.Logger.Debugf("Layer '%s' SHA: %s\n", layer.Identifier(), sha)
 		return sha, image.ReuseLayer(previousSHA)
 	}
-	e.Logger.Debugf("Exporting layer '%s' with SHA %s\n", layer.Identifier(), sha)
+	e.Logger.Infof("Adding layer '%s'\n", layer.Identifier())
+	e.Logger.Debugf("Layer '%s' SHA: %s\n", layer.Identifier(), sha)
 	return sha, image.AddLayer(tarPath)
 }
 
@@ -193,62 +195,4 @@ func (e *Exporter) addBuildMetadataLabel(image imgutil.Image, plan []BOMEntry, l
 	}
 
 	return nil
-}
-
-func (e *Exporter) saveImage(image imgutil.Image, additionalNames []string) error {
-	var saveErr error
-	if err := image.Save(additionalNames...); err != nil {
-		var ok bool
-		if saveErr, ok = err.(imgutil.SaveError); !ok {
-			return errors.Wrap(err, "saving image")
-		}
-	}
-
-	e.Logger.Info("*** Images:")
-	for _, n := range append([]string{image.Name()}, additionalNames...) {
-		e.Logger.Infof("      %s - %s\n", n, getSaveStatus(saveErr, n))
-	}
-
-	id, idErr := image.Identifier()
-	if idErr != nil {
-		if saveErr != nil {
-			return &MultiError{Errors: []error{idErr, saveErr}}
-		}
-		return idErr
-	}
-
-	e.logReference(id)
-	return saveErr
-}
-
-func (e *Exporter) logReference(identifier imgutil.Identifier) {
-	switch v := identifier.(type) {
-	case local.IDIdentifier:
-		e.Logger.Infof("\n*** Image ID: %s\n", v.String())
-	case remote.DigestIdentifier:
-		e.Logger.Infof("\n*** Digest: %s\n", v.Digest.DigestStr())
-	default:
-		e.Logger.Infof("\n*** Reference: %s\n", v.String())
-	}
-}
-
-type MultiError struct {
-	Errors []error
-}
-
-func (me *MultiError) Error() string {
-	return fmt.Sprintf("failed with multiple errors %+v", me.Errors)
-}
-
-func getSaveStatus(err error, imageName string) string {
-	if err != nil {
-		if saveErr, ok := err.(imgutil.SaveError); ok {
-			for _, d := range saveErr.Errors {
-				if d.ImageName == imageName {
-					return d.Cause.Error()
-				}
-			}
-		}
-	}
-	return "succeeded"
 }
